@@ -27,6 +27,19 @@ const SOUNDS = {
     { frequency: 784, duration: 0.16, type: 'triangle', volume: 0.06, delay: 0.24 },
     { frequency: 1046, duration: 0.35, type: 'triangle', volume: 0.065, delay: 0.36 },
   ],
+  megaWin: [
+    { frequency: 659, duration: 0.15, type: 'triangle', volume: 0.06 },
+    { frequency: 784, duration: 0.15, type: 'triangle', volume: 0.06, delay: 0.1 },
+    { frequency: 988, duration: 0.17, type: 'triangle', volume: 0.065, delay: 0.2 },
+    { frequency: 1318, duration: 0.32, type: 'triangle', volume: 0.07, delay: 0.31 },
+  ],
+  superWin: [
+    { frequency: 784, duration: 0.14, type: 'triangle', volume: 0.065 },
+    { frequency: 988, duration: 0.14, type: 'triangle', volume: 0.065, delay: 0.09 },
+    { frequency: 1175, duration: 0.16, type: 'triangle', volume: 0.07, delay: 0.18 },
+    { frequency: 1568, duration: 0.24, type: 'triangle', volume: 0.075, delay: 0.28 },
+    { frequency: 1318, duration: 0.38, type: 'triangle', volume: 0.07, delay: 0.45 },
+  ],
 };
 
 /** Telifli dosya kullanmadan kısa efektleri WebAudio osilatörleriyle üretir. */

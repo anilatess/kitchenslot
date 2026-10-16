@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
-import { COLS, ROWS } from '../game/config.js';
+import { COLS, ROWS, SYM } from '../game/config.js';
 import { isMul } from '../game/engine.js';
 import { CELL, COLORS, TIMING } from '../core/constants.js';
 import { easeInQuad, easeOutBack, easeOutQuad, easeInBack } from '../animation/easing.js';
@@ -14,6 +14,7 @@ const ORIGIN = { landscape: { x: 360, y: 105 }, portrait: { x: 80, y: 250 } };
 export class GridView extends Container {
   #animator;
   #layer = new Container();
+  #particles = new Container();
   /** @type {(SymbolView|null)[][]} [kolon][satır] */
   #symbols = [];
 
@@ -27,7 +28,8 @@ export class GridView extends Container {
       .stroke({ width: 4, color: COLORS.panelEdge });
     const mask = new Graphics().rect(0, 0, WIDTH, HEIGHT).fill({ color: 0xffffff });
     this.#layer.mask = mask;
-    this.addChild(panel, this.#layer, mask);
+    this.#particles.mask = mask;
+    this.addChild(panel, this.#layer, this.#particles, mask);
   }
 
   layout(orientation) {
@@ -44,7 +46,9 @@ export class GridView extends Container {
       column.map((cell, r) => {
         const view = this.#spawn(cell, c, r, this.#cellY(r) - (ROWS + 1) * CELL);
         const delay = c * TIMING.columnDelay + (ROWS - 1 - r) * 35;
-        falls.push(this.#animator.wait(delay).then(() => this.#fall(view, this.#cellY(r), TIMING.dropIn)));
+        falls.push(this.#animator.wait(delay)
+          .then(() => this.#fall(view, this.#cellY(r), TIMING.dropIn))
+          .then(() => this.#specialLanding(view)));
         return view;
       }),
     );
@@ -56,7 +60,8 @@ export class GridView extends Container {
     const cells = this.#cellsWhere((c, r) => step.removed[c][r]);
     await Promise.all(cells.map(({ view }) => this.#pulse(view, isMul(view.cell) ? 1.35 : 1.18)));
 
-    step.collected.forEach((m) => onCollect?.(m.value));
+    this.#burstCells(cells);
+    step.collected.forEach((m) => onCollect?.(m.value, this.#cellPosition(m.col, m.row)));
     await this.#vanish(cells);
     await this.#settle(step.nextGrid);
     await this.#animator.wait(TIMING.stepGap);
@@ -66,7 +71,8 @@ export class GridView extends Container {
   async collectCells(collected, onCollect) {
     const cells = collected.map(({ col, row }) => ({ col, row, view: this.#symbols[col][row] }));
     await Promise.all(cells.map(({ view }) => this.#pulse(view, 1.35)));
-    collected.forEach((m) => onCollect?.(m.value));
+    this.#burstCells(cells);
+    collected.forEach((m) => onCollect?.(m.value, this.#cellPosition(m.col, m.row)));
     await this.#vanish(cells);
   }
 
@@ -80,6 +86,39 @@ export class GridView extends Container {
 
   #cellY = (row) => row * CELL + CELL / 2;
   #cellX = (col) => col * CELL + CELL / 2;
+  #cellPosition = (col, row) => ({ x: this.x + this.#cellX(col), y: this.y + this.#cellY(row) });
+
+  #specialLanding(view) {
+    if (view.cell === SYM.SCT) return this.#pulse(view, 1.14);
+    if (view.cell !== SYM.WLD) return Promise.resolve();
+    const direction = view.x % 2 ? 1 : -1;
+    return this.#animator.tween(view, { rotation: direction * 0.12 }, 130, easeOutQuad)
+      .then(() => this.#animator.tween(view, { rotation: 0 }, 180, easeInQuad));
+  }
+
+  #burstCells(cells) {
+    for (const { col, row, view } of cells) {
+      const color = isMul(view.cell) || view.cell === SYM.SCT ? 0xffd25a
+        : view.cell === SYM.WLD ? 0x2ee6a6 : 0xff8a5c;
+      const origin = { x: this.#cellX(col), y: this.#cellY(row) };
+      for (let i = 0; i < 7; i++) {
+        const angle = (Math.PI * 2 * i) / 7 + Math.random() * 0.18;
+        const distance = 28 + Math.random() * 34;
+        const particle = new Graphics().circle(0, 0, 3 + Math.random() * 3).fill({ color });
+        particle.position.set(origin.x, origin.y);
+        particle.alpha = 0.9;
+        particle.scale.set(0.7);
+        this.#particles.addChild(particle);
+        this.#animator.tween(particle, {
+          x: origin.x + Math.cos(angle) * distance,
+          y: origin.y + Math.sin(angle) * distance,
+          scale: 0,
+          alpha: 0,
+        }, 260 + Math.random() * 130, easeOutQuad)
+          .then(() => particle.destroy({ children: true }));
+      }
+    }
+  }
 
   #spawn(cell, col, row, y) {
     const view = new SymbolView(cell);
@@ -131,7 +170,8 @@ export class GridView extends Container {
       for (let i = 0; i < fresh; i++) {
         const view = this.#spawn(nextGrid[c][i], c, i, -(fresh - i) * CELL + CELL / 2);
         column[i] = view;
-        falls.push(this.#fall(view, this.#cellY(i), this.#fallTime(fresh)));
+        falls.push(this.#fall(view, this.#cellY(i), this.#fallTime(fresh))
+          .then(() => this.#specialLanding(view)));
       }
       this.#symbols[c] = column;
     }

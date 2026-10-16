@@ -47,7 +47,16 @@ export class RoundPlayer {
     }
 
     // Motor kazancı tavanla sınırlamış olabilir: gösterilen son değer resmi toplamdır.
-    if (round.total >= 10) this.#audio?.play('bigWin');
+    if (round.total >= 50) {
+      this.#audio?.play('superWin');
+      await this.#hud.showBanner('SUPER KAZANÇ!');
+    } else if (round.total >= 25) {
+      this.#audio?.play('megaWin');
+      await this.#hud.showBanner('MEGA KAZANÇ!');
+    } else if (round.total >= 10) {
+      this.#audio?.play('bigWin');
+      await this.#hud.showBanner('BIG KAZANÇ!');
+    }
     if (round.capped) await this.#hud.showBanner('MAKSİMUM KAZANÇ!');
     await this.#hud.countWinTo(round.total * bet);
     this.#hud.setFreeSpins(null);
@@ -66,9 +75,10 @@ export class RoundPlayer {
     // Bedava dönüşte çarpan birikimlidir: önceki dönüşlerden gelen değerle başla.
     let multiplier = spin.mode === 'free' ? spin.freeMult - spin.multSum : 0;
     this.#hud.setMultiplier(multiplier);
-    const collect = (value) => {
+    const collect = (value, origin) => {
       multiplier += value;
       this.#hud.setMultiplier(multiplier);
+      this.#hud.flyMultiplier?.(value, origin);
       this.#audio?.play('multiplier');
     };
 

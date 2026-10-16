@@ -176,6 +176,21 @@ export class Hud extends Container {
     }
   }
 
+  /** Çarpan sembolünden HUD göstergesine kısa bir parıltı uçurur. */
+  flyMultiplier(value, origin) {
+    const flyer = text(`+${value}`, 24, COLORS.gold);
+    flyer.anchor.set(0.5);
+    flyer.position.set(origin.x, origin.y);
+    flyer.scale.set(0.65);
+    this.addChild(flyer);
+    this.#animator.tween(flyer, {
+      x: this.#mult.x,
+      y: this.#mult.y,
+      scale: 0.35,
+      alpha: 0,
+    }, TIMING.collect, easeOutQuad).then(() => flyer.destroy({ children: true }));
+  }
+
   /** { current, total } ya da null (gizle). */
   setFreeSpins(info) {
     this.#free.text = info ? `BEDAVA DÖNÜŞ  ${info.current} / ${info.total}` : '';

@@ -4,9 +4,10 @@ import { RoundPlayer } from '../src/presenter/RoundPlayer.js';
 
 function setup(round) {
   const sounds = [];
+  const banners = [];
   const audio = { play: (name) => sounds.push(name) };
   const hud = {
-    showBanner: async () => {}, setFreeSpins: () => {}, setMultiplier: () => {},
+    showBanner: async (message) => banners.push(message), setFreeSpins: () => {}, setMultiplier: () => {},
     countWinTo: async () => {},
   };
   const grid = {
@@ -14,7 +15,7 @@ function setup(round) {
     playStep: async (_step, collect) => collect(3), collectCells: async (_cells, collect) => collect(2),
   };
   const animator = { wait: async () => {} };
-  return { player: new RoundPlayer({ grid, hud, animator, audio }), sounds, round };
+  return { player: new RoundPlayer({ grid, hud, animator, audio }), sounds, banners, round };
 }
 
 test('tur akışı spin, düşüş, patlama, çarpan, scatter ve bonus seslerini çağırır', async () => {
@@ -40,7 +41,23 @@ test('tur akışı spin, düşüş, patlama, çarpan, scatter ve bonus seslerini
 });
 
 test('bahisten küçük kazançta büyük kazanç kutlama sesi çalmaz', async () => {
-  const { player, sounds, round } = setup({ total: 0.5, capped: false, spins: [] });
+  const { player, sounds, banners, round } = setup({ total: 0.5, capped: false, spins: [] });
   await player.play(round, 1);
   assert.equal(sounds.includes('bigWin'), false);
+  assert.deepEqual(banners, []);
+});
+
+test('BIG, MEGA ve SUPER kutlamaları yalnızca kendi bahis eşiklerinde görünür', async (t) => {
+  for (const [win, message, sound] of [
+    [10, 'BIG KAZANÇ!', 'bigWin'],
+    [25, 'MEGA KAZANÇ!', 'megaWin'],
+    [50, 'SUPER KAZANÇ!', 'superWin'],
+  ]) {
+    await t.test(`${win}x`, async () => {
+      const { player, sounds, banners, round } = setup({ total: win, capped: false, spins: [] });
+      await player.play(round, 1);
+      assert.deepEqual(banners, [message]);
+      assert.deepEqual(sounds, [sound]);
+    });
+  }
 });

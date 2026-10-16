@@ -7,6 +7,7 @@ export class SymbolView extends Container {
   constructor(cell) {
     super();
     this.cell = cell;
+    this.rotation = 0;
     this.addChild(createSymbolSkin(cell));
   }
 }
