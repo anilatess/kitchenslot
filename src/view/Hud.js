@@ -141,13 +141,13 @@ export class Hud extends Container {
     this.#hint.visible = !this.#portrait && !this.#mult.text && this.#spinMode !== 'free';
     [[this.#bonus, 15, 25], [this.#turbo, 12, 23], [this.#autoplayCount, 12, 21],
       [this.#autoplayToggle, 12, 22], [this.#audio, 11, 22], [this.#spin, 11, 18],
-      [this.#betMinus, 22, 36], [this.#betPlus, 22, 36]]
+      [this.#betMinus, 22, 28], [this.#betPlus, 22, 28]]
       .forEach(([button, desktop, mobile]) => button.setFontSize(this.#portrait ? mobile : desktop));
     [[this.#bonus, 220, 44, 280, 84], [this.#turbo, 220, 32, 164, 84],
       [this.#audio, 88, 32, 184, 84], [this.#rulesButton, 32, 32, 84, 84],
       [this.#historyButton, 36, 32, 164, 84], [this.#settingsButton, 36, 32, 164, 84],
       [this.#autoplayCount, 82, 36, 112, 84], [this.#autoplayToggle, 126, 36, 200, 84],
-      [this.#betMinus, 34, 34, 84, 84], [this.#betPlus, 34, 34, 84, 84],
+      [this.#betMinus, 34, 34, 56, 56], [this.#betPlus, 34, 34, 56, 56],
       [this.#spin, 112, 112, 168, 168], [this.#resetBalance, 150, 34, 220, 84]]
       .forEach(([button, dw, dh, mw, mh]) => button.setSize(this.#portrait ? mw : dw, this.#portrait ? mh : dh));
     this.#rulesButton.setFontSize(this.#portrait ? 32 : 20);

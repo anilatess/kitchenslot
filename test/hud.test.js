@@ -93,10 +93,12 @@ test('mobil kontroller büyür, yön değişince masaüstü ölçülerine döner
   const minus = buttonWith(hud, '−');
   const menu = buttonWith(hud, '☰');
   hud.layout('portrait');
-  for (const button of [menu, minus, buttonWith(hud, 'BONUS AL (100x)')]) {
+  for (const button of [menu, buttonWith(hud, 'BONUS AL (100x)')]) {
     assert.ok(button.hitArea.contains(41, 41), '390px ekranda yaklaşık 45px dokunma alanı');
     assert.equal(button.hitArea.contains(0, 43), false);
   }
+  assert.ok(minus.hitArea.width < menu.hitArea.width, 'bahis düğmeleri ana kontrollerden küçük olmalı');
+  assert.equal(buttonWith(hud, '+').hitArea.width, minus.hitArea.width);
   assert.equal(help.visible, false, 'yardım menüye taşınır');
   assert.equal(menu.visible, true);
   hud.layout('landscape');
