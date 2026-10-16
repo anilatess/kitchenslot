@@ -8,6 +8,7 @@ import { GridView } from '../view/GridView.js';
 import { Hud } from '../view/Hud.js';
 import { COLORS } from './constants.js';
 import { GameState } from './GameState.js';
+import { Autoplay } from './Autoplay.js';
 import { ResponsiveRoot } from './ResponsiveRoot.js';
 
 // Uygulamanın birleştirici sınıfı: parçaları kurar, birbirine bağlar.
@@ -19,6 +20,7 @@ export class Game {
   #player;
   #hud;
   #animator;
+  #autoplay;
 
   constructor(host) {
     this.#host = host;
@@ -44,6 +46,14 @@ export class Game {
     this.#player = new RoundPlayer({ grid, hud, animator });
     this.#hud = hud;
     this.#animator = animator;
+    this.#autoplay = new Autoplay({
+      play: () => this.#playRound(false),
+      canSpin: () => this.#state.canSpin,
+      onChange: (value) => {
+        this.#hud.setAutoplay(value);
+        this.#syncHud();
+      },
+    });
 
     this.#bindInput();
     this.#state.on('change', () => this.#syncHud());
@@ -58,6 +68,8 @@ export class Game {
     this.#hud.on('betDown', () => state.changeBet(-1));
     this.#hud.on('turbo', () => state.toggleTurbo());
     this.#hud.on('buyBonus', () => this.#buyBonus());
+    this.#hud.on('autoplayCount', () => this.#autoplay.selectNext());
+    this.#hud.on('autoplayToggle', () => this.#autoplay.running ? this.#autoplay.stop() : this.#autoplay.start());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
@@ -71,13 +83,19 @@ export class Game {
     this.#hud.setBalance(s.balance);
     this.#hud.setBet(s.bet);
     this.#hud.setTurbo(s.turbo);
-    this.#hud.setControls({ canSpin: s.canSpin, canChangeBet: !s.busy, canBuyBonus: s.canBuyBonus });
+    this.#hud.setControls({
+      canSpin: s.canSpin && !this.#autoplay?.active,
+      canChangeBet: !s.busy && !this.#autoplay?.active,
+      canBuyBonus: s.canBuyBonus && !this.#autoplay?.active,
+      canAutoplay: s.canSpin && !this.#autoplay?.active,
+      autoplayRunning: this.#autoplay?.running,
+    });
     this.#animator.setTurbo(s.turbo);
   }
 
   async #spin() {
     const state = this.#state;
-    if (!state.canSpin) return;
+    if (!state.canSpin || this.#autoplay?.active) return;
 
     state.setBusy(true);
     await this.#playRound(false);
@@ -85,7 +103,7 @@ export class Game {
 
   async #buyBonus() {
     const state = this.#state;
-    if (!state.canBuyBonus) return;
+    if (!state.canBuyBonus || this.#autoplay?.active) return;
 
     state.setBusy(true);
     try {
@@ -107,6 +125,7 @@ export class Game {
       const round = playRound(this.#rng, { record: true, buy });
       const payout = await this.#player.play(round, state.bet);
       state.credit(payout);
+      return round;
     } finally {
       state.setBusy(false);
     }

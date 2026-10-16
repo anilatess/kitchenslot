@@ -30,3 +30,18 @@ test('bonus düğmesi bakiye uygun değilken pasif görünür', () => {
   hud.setControls({ canSpin: true, canChangeBet: true, canBuyBonus: true });
   assert.equal(hud.children[10].alpha, 1);
 });
+
+test('autoplay HUD kalan dönüşü gösterir ve durdur düğmesini değiştirir', () => {
+  const hud = new Hud({});
+  const countButton = hud.children[11];
+  const toggleButton = hud.children[12];
+  const status = hud.children[13];
+  hud.setAutoplay({ selected: 25, remaining: 17, running: true });
+  assert.equal(countButton.children[1].text, 'OTO ×25');
+  assert.equal(toggleButton.children[1].text, 'DURDUR');
+  assert.equal(status.text, 'KALAN 17 TUR');
+
+  hud.setAutoplay({ selected: 25, remaining: 0, running: false });
+  assert.equal(toggleButton.children[1].text, 'OTO BAŞLAT');
+  assert.equal(status.text, '');
+});
