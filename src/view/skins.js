@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { SYM, SYMBOL_VIEW } from '../game/config.js';
 import { isMul, mulValue } from '../game/engine.js';
 import { CELL, COLORS } from '../core/constants.js';
@@ -12,6 +12,13 @@ import { CELL, COLORS } from '../core/constants.js';
 
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 const TILE_SIZE = CELL - 10;
+
+const ATLAS_KEYS = {
+  0: 'tomato', 1: 'garlic', 2: 'pepper', 3: 'carrot', 4: 'dumpling',
+  5: 'sushi', 6: 'steak', 7: 'onion', 8: 'mushroom', 20: 'chef', 21: 'pot',
+  multiplier: 'multiplier',
+};
+let atlasTextures = null;
 
 const TILE_STYLES = {
   low:     { fill: 0x25294f, edge: 0x4a5199 },
@@ -34,8 +41,51 @@ function emojiText(char, size) {
   return text;
 }
 
+/** Pixi spritesheet'ini yükler; dosya yoksa emoji yedeği kullanılır. */
+export async function loadSymbolAtlas(url) {
+  try {
+    const atlas = await Assets.load(url);
+    const textures = atlas?.textures ?? atlas;
+    if (!textures || typeof textures !== 'object') throw new Error('Geçersiz sembol atlası');
+    atlasTextures = textures;
+    return true;
+  } catch {
+    atlasTextures = null;
+    return false;
+  }
+}
+
+function atlasTexture(cell) {
+  const key = isMul(cell) ? ATLAS_KEYS.multiplier : ATLAS_KEYS[cell];
+  return atlasTextures?.[key] ?? atlasTextures?.[`${key}.png`] ?? null;
+}
+
+function spriteFromAtlas(texture) {
+  const sprite = new Sprite(texture);
+  sprite.anchor.set(0.5);
+  sprite.width = TILE_SIZE;
+  sprite.height = TILE_SIZE;
+  return sprite;
+}
+
 /** Hücre koduna göre merkezi (0,0) olan bir görsel üretir. */
 export function createSymbolSkin(cell) {
+  const texture = atlasTexture(cell);
+  if (texture && !isMul(cell)) return spriteFromAtlas(texture);
+
+  if (texture && isMul(cell)) {
+    const skin = new Container();
+    skin.addChild(spriteFromAtlas(texture));
+    const label = new Text({
+      text: `x${mulValue(cell)}`,
+      style: { fontFamily: 'system-ui, sans-serif', fontSize: 30, fontWeight: '800', fill: COLORS.gold },
+    });
+    label.anchor.set(0.5);
+    label.y = 24;
+    skin.addChild(label);
+    return skin;
+  }
+
   const style = TILE_STYLES[tierOf(cell)];
   const skin = new Container();
 

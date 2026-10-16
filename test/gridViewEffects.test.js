@@ -2,7 +2,10 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fake from './helpers/fakePixi.js';
 
-mock.module('pixi.js', { namedExports: { Container: fake.Container, Graphics: fake.Graphics, Text: fake.Text } });
+mock.module('pixi.js', { namedExports: {
+  Assets: fake.Assets, Container: fake.Container, Graphics: fake.Graphics,
+  Sprite: fake.Sprite, Text: fake.Text,
+} });
 
 const { GridView } = await import('../src/view/GridView.js');
 const { SYM, COLS, ROWS } = await import('../src/game/config.js');

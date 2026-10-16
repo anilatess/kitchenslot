@@ -60,6 +60,18 @@ export class Text extends Container {
   }
 }
 
+export class Sprite extends Container {
+  constructor(texture) {
+    super();
+    this.texture = texture;
+    this.anchor = new Point();
+    this.width = 0;
+    this.height = 0;
+  }
+}
+
+export const Assets = { load: async () => ({ textures: {} }) };
+
 /** Elle sürülen ticker: Animator'a verilir, pump() ile ilerletilir. */
 export function createFakeTicker() {
   const fns = [];
