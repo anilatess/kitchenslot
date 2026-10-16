@@ -1,63 +1,59 @@
 # Mutfak Slot
 
-Pixi.js (v8) + Vite ile yapılmış 5x4 slot oyunu: ways-to-win, tumble, Wild / Scatter / Çarpan,
-bedava dönüş ve bonus satın alma mantığı. Semboller şimdilik emoji (geçici), ileride sprite atlas.
+Pixi.js v8 ve Vite ile hazırlanmış 5x4 mutfak temalı slot oyunu. Oyun kuralları Pixi'den bağımsız saf JavaScript katmanındadır; tüm tur sonucu sunum başlamadan önce hesaplanır.
 
-    npm install
-    npm run dev       # geliştirme sunucusu
-    npm run build     # üretim derlemesi (dist/)
-    npm test          # birim + sunum testleri
-    npm run sim       # RTP simülasyonu (node sim/simulate.js [tur] [seed])
+## Kurulum ve komutlar
 
-Oynarken: **Boşluk** veya SPIN ile çevir, ± ile bahis, TURBO ile hızlandır.
+```sh
+npm install
+npm run dev       # geliştirme sunucusu
+npm run build     # dist/ üretim derlemesi
+npm run preview   # üretim derlemesini yerel olarak önizle
+npm test          # birim ve sunum testleri
+npm run sim       # RTP simülasyonu (node sim/simulate.js [tur] [seed])
+npm run sim:big   # 10 milyon turluk simülasyon
+```
+
+## Oynanış
+
+- **SPIN** veya **Boşluk** ile döndür; `+` / `−` ile bahsi değiştir.
+- **TURBO** animasyonları hızlandırır. Tercihler ve bakiye yerel tarayıcıda saklanır.
+- Soldan başlayan en az üç makarada eşleşmeler ways-to-win ile kazanır. Kazanan semboller patlar, üsttekiler düşer ve yeni semboller gelir (tumble).
+- Wild yalnızca 2–4. makaralarda çıkar. Scatter 3 veya daha fazla geldiğinde 10 bedava dönüş verir; bedava dönüşte tetiklenirse 5 dönüş ekler. Bedava dönüş çarpanları bonus boyunca birikir.
+- Çarpanlar tumble zinciri bitince turun toplam kazancına uygulanır. Kazanç, bahis tutarının 1000 katıyla sınırlıdır.
+- **BONUS AL (100x)** düğmesi, maliyeti onaylayınca bonus turunu satın alır. Bakiye yetersizse devre dışıdır.
+- **AUTOPLAY**, 10/25/50/100 tur seçeneği sunar. Bonus tetiklenince, tek tur kazancı bahsin 50 katını aşınca veya bakiye bahse yetmeyince durur; **DURDUR** devam eden turu bitirip yeni turu başlatmaz.
+- Bakiye bittiğinde **Bakiyeyi sıfırla** görünür. **?** ödeme tablosu ve kuralları açar.
+- Büyük kazanç kutlamaları 10x'te BIG, 25x'te MEGA ve 50x'te SUPER olarak gösterilir. Bahisten küçük kazançta kutlama gösterilmez.
+
+## Ses ve görseller
+
+Sesler `src/audio/AudioManager.js` içindeki WebAudio osilatörleriyle koddan üretilir; harici ses dosyası veya üçüncü taraf kaynak kullanılmaz. Tarayıcıların otomatik oynatma kısıtına uymak için ses ilk kullanıcı etkileşiminden sonra başlar. Ses tercihi diğer oyun tercihleriyle birlikte saklanır.
+
+Semboller varsayılan olarak emoji ve çizilmiş karolarla gösterilir. İsteğe bağlı atlas, `public/assets/symbols.json` konumunda Pixi spritesheet JSON'u ve aynı klasörde kare görselleri olarak sağlanabilir. Tanınan kare adları: `tomato`, `garlic`, `pepper`, `carrot`, `dumpling`, `sushi`, `steak`, `onion`, `mushroom`, `chef`, `pot`, `multiplier` (uzantılı veya uzantısız). Atlas açılışta `Assets.load` ile yüklenir; dosya veya kare yoksa ilgili sembol emoji görünümüne düşer. Atlas olmadığı durumda da oyun normal açılır.
 
 ## Mimari
 
-Üç katman, tek yönlü bağımlılık: `game` (kural) ← `presenter` (sıra) ← `view` (çizim).
-`game/` Pixi'yi hiç bilmez; simülasyon ve testler onu doğrudan kullanır.
+Bağımlılık yönü `game` ← `presenter` ← `view` şeklindedir. `game/` Pixi'yi içe aktarmaz; simülasyon ve testler motoru doğrudan kullanır.
 
-    src/
-      game/         KURALLAR (saf JS, Pixi yok)
-        config.js     semboller, ödeme tablosu, ağırlıklar, çarpanlar, kurallar
-        engine.js     playRound / playSpin: sonucu ve tumble adımlarını üretir
-        rng.js        tohumlanabilir RNG
-      core/         UYGULAMA İSKELETİ
-        Game.js           parçaları kurar ve birbirine bağlar
-        GameState.js      bakiye, bahis, turbo, meşgul (olay yayar)
-        ResponsiveRoot.js yatay/dikey düzen + ekrana sığdırma
-        constants.js      boyutlar, süreler, renkler
-        Emitter.js
-      animation/    ZAMANLAMA
-        Animator.js   Promise tabanlı tween (await ile sıralanır), turbo hızı
-        easing.js
-      presenter/    SAHNE AKIŞI
-        RoundPlayer.js  motorun turunu sırayla oynatır (düş, patlat, çarpan, bedava dönüş)
-      view/         ÇİZİM
-        GridView.js   5x4 ızgara: dropIn / playStep / collectCells
-        SymbolView.js tek sembol
-        skins.js      SEMBOL GÖRSELLERİ - atlas'a geçişte değişecek tek dosya
-        Hud.js, Button.js, Readout.js
+```text
+src/
+  game/       Saf oyun kuralları: config.js, engine.js, rng.js
+  core/       Game birleştiricisi, GameState, responsive düzen ve sabitler
+  animation/  Promise tabanlı tween ve easing
+  presenter/  RoundPlayer tur sonucunu sahnede sıralı oynatır
+  view/       Grid, semboller, HUD, ödeme/kurallar ekranı ve skins.js
+  audio/      WebAudio tabanlı AudioManager
+sim/          RTP simülasyonu ve ödeme tablosu çıktısı
+test/         Motor, durum, animasyon ve sunum testleri
+```
 
-    sim/            RTP simülasyonu ve ödeme tablosu çıktısı
-    test/           motor, animator, durum ve sunum testleri
+Akış: `Game.#spin → engine.playRound(record) → RoundPlayer.play → GridView/Hud animasyonları`. Motor `steps[]` içindeki ızgara, kaldırılan/toplanan hücreler ve kazançları önceden hesaplar; sunum katmanı kural kararı vermez. Sembol görünümünü değiştirmek için `src/view/skins.js` içindeki `createSymbolSkin(cell)` kullanılır.
 
-### Akış
+## Matematik
 
-    Game.#spin -> engine.playRound(record) -> RoundPlayer.play -> GridView/Hud animasyonları
+Varsayılan ayarlar için referans 5 milyon turluk simülasyon: RTP yaklaşık %95–96, kazanma sıklığı yaklaşık %55, bonus sıklığı yaklaşık 1/175, bonus satın alma RTP'si yaklaşık %96. Ayarlar `src/game/config.js` içindedir (`WEIGHTS`, `PAY_SCALE`, `MULTS`); matematiği değiştirince `npm run sim` ile yeniden ölçün.
 
-Motor tüm sonucu önceden hesaplar (`steps[]`: grid, removed, collected, nextGrid, stepWin);
-sunum katmanı bunu oynatır, hiçbir kural kararı vermez. Sonucu sunucudan almak istersen
-yalnızca `Game.#spin` içindeki `playRound` çağrısı değişir.
+## GitHub Pages yayını
 
-### Sprite atlas'a geçiş
-`src/view/skins.js` içindeki `createSymbolSkin(cell)` fonksiyonu `Sprite` döndürsün, gerisi aynı kalır.
-
-## Matematik (varsayılan ayarlar, 5M tur simülasyonu)
-RTP ~%95-96 | kazanç sıklığı ~%55 | bonus 1/175 | bonus satın alma (100x) RTP ~%96 | tavan 1000x.
-Ayar noktaları: `config.js` (ağırlıklar, `PAY_SCALE`, `MULTS`). Değiştirince `npm run sim` ile ölç.
-
-## Henüz yok
-Parçacık/görsel cilası, ödeme tablosu ekranı ve sprite atlas.
-
-## Ses efektleri
-Sesler `src/audio/AudioManager.js` içinde WebAudio osilatörleriyle üretilir; dış ses dosyası veya üçüncü taraf ses kaynağı kullanılmaz. Tarayıcı kısıtları nedeniyle ses ilk kullanıcı etkileşiminde başlar. Ses tercihi `localStorage`'da saklanır.
+`.github/workflows/deploy.yml`, `main` dalına gönderimde ve elle başlatıldığında testleri, üretim derlemesini ve Pages yayımını çalıştırır. Depo ayarlarında **Settings → Pages → Build and deployment → Source: GitHub Actions** seçilmelidir. Vite `base: './'` ile derleme dosyalarına göreli yollar kullanır; bu, depo alt yolu üzerinden sunulan Pages sitelerinde de çalışır.

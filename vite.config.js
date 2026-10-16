@@ -1,4 +1,4 @@
 import { defineConfig } from 'vite';
 
-// base './' -> GitHub Pages gibi alt klasörlerde de çalışır
+// Göreli asset yolları, GitHub Pages'in depo alt yolu altında da çalışır.
 export default defineConfig({ base: './' });
