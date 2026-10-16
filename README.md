@@ -57,4 +57,7 @@ RTP ~%95-96 | kazanç sıklığı ~%55 | bonus 1/175 | bonus satın alma (100x) 
 Ayar noktaları: `config.js` (ağırlıklar, `PAY_SCALE`, `MULTS`). Değiştirince `npm run sim` ile ölç.
 
 ## Henüz yok
-Autoplay, ses efektleri, bonus satın alma düğmesi (motor hazır), sprite atlas.
+Parçacık/görsel cilası, ödeme tablosu ekranı ve sprite atlas.
+
+## Ses efektleri
+Sesler `src/audio/AudioManager.js` içinde WebAudio osilatörleriyle üretilir; dış ses dosyası veya üçüncü taraf ses kaynağı kullanılmaz. Tarayıcı kısıtları nedeniyle ses ilk kullanıcı etkileşiminde başlar. Ses tercihi `localStorage`'da saklanır.

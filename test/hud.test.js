@@ -59,3 +59,12 @@ test('bakiye sıfırlama düğmesi yalnızca bakiye bittiğinde görünür', () 
   resetButton.emit('pointertap');
   assert.equal(clicked, true);
 });
+
+test('ses düğmesi açık/kapalı tercihini görünür biçimde gösterir', () => {
+  const hud = new Hud({});
+  const audioButton = hud.children[15];
+  hud.setAudioEnabled(false);
+  assert.equal(audioButton.children[1].text, 'SES KAPALI');
+  hud.setAudioEnabled(true);
+  assert.equal(audioButton.children[1].text, 'SES AÇIK');
+});

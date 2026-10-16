@@ -10,6 +10,7 @@ import { COLORS } from './constants.js';
 import { GameState } from './GameState.js';
 import { Autoplay } from './Autoplay.js';
 import { ResponsiveRoot } from './ResponsiveRoot.js';
+import { AudioManager } from '../audio/AudioManager.js';
 
 // Uygulamanın birleştirici sınıfı: parçaları kurar, birbirine bağlar.
 // Kural içermez (game/), çizim detayı içermez (view/).
@@ -21,6 +22,7 @@ export class Game {
   #hud;
   #animator;
   #autoplay;
+  #audio;
 
   constructor(host) {
     this.#host = host;
@@ -43,9 +45,11 @@ export class Game {
     const hud = root.add(new Hud(animator));
     app.stage.addChild(root);
 
-    this.#player = new RoundPlayer({ grid, hud, animator });
+    this.#audio = new AudioManager();
+    this.#player = new RoundPlayer({ grid, hud, animator, audio: this.#audio });
     this.#hud = hud;
     this.#animator = animator;
+    this.#hud.setAudioEnabled(this.#audio.enabled);
     this.#autoplay = new Autoplay({
       play: () => this.#playRound(false),
       canSpin: () => this.#state.canSpin,
@@ -68,9 +72,17 @@ export class Game {
     this.#hud.on('betDown', () => state.changeBet(-1));
     this.#hud.on('turbo', () => state.toggleTurbo());
     this.#hud.on('resetBalance', () => state.resetBalance());
+    this.#hud.on('audioToggle', () => {
+      this.#audio.unlock();
+      this.#audio.setEnabled(!this.#audio.enabled);
+      this.#hud.setAudioEnabled(this.#audio.enabled);
+    });
     this.#hud.on('buyBonus', () => this.#buyBonus());
     this.#hud.on('autoplayCount', () => this.#autoplay.selectNext());
-    this.#hud.on('autoplayToggle', () => this.#autoplay.running ? this.#autoplay.stop() : this.#autoplay.start());
+    this.#hud.on('autoplayToggle', () => {
+      this.#audio.unlock();
+      return this.#autoplay.running ? this.#autoplay.stop() : this.#autoplay.start();
+    });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
@@ -85,6 +97,7 @@ export class Game {
     this.#hud.setBankrupt(s.isBankrupt);
     this.#hud.setBet(s.bet);
     this.#hud.setTurbo(s.turbo);
+    this.#hud.setAudioEnabled(this.#audio?.enabled ?? true);
     this.#hud.setControls({
       canSpin: s.canSpin && !this.#autoplay?.active,
       canChangeBet: !s.busy && !this.#autoplay?.active,
@@ -97,6 +110,7 @@ export class Game {
 
   async #spin() {
     const state = this.#state;
+    this.#audio.unlock();
     if (!state.canSpin || this.#autoplay?.active) return;
 
     state.setBusy(true);
@@ -105,6 +119,7 @@ export class Game {
 
   async #buyBonus() {
     const state = this.#state;
+    this.#audio.unlock();
     if (!state.canBuyBonus || this.#autoplay?.active) return;
 
     state.setBusy(true);
