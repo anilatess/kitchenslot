@@ -3,6 +3,7 @@ import { COLORS, TIMING } from '../core/constants.js';
 import { easeOutBack, easeOutQuad } from '../animation/easing.js';
 import { Button } from './Button.js';
 import { Readout } from './Readout.js';
+import { RulesPanel } from './RulesPanel.js';
 
 const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -12,13 +13,13 @@ const POSITIONS = {
     title: [640, 40], free: [640, 82], mult: [190, 329], banner: [640, 329],
     win: [640, 606], balance: [150, 668], bet: [640, 672],
     betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440], bonus: [1130, 330], resetBalance: [150, 575],
-    autoplayCount: [1040, 250], autoplayToggle: [1190, 250], autoplayStatus: [1115, 200], audio: [1130, 145],
+    autoplayCount: [1040, 250], autoplayToggle: [1190, 250], autoplayStatus: [1115, 200], audio: [1130, 145], rules: [1220, 60],
   },
   portrait: {
     title: [360, 60], free: [360, 130], mult: [360, 205], banner: [360, 474],
     win: [360, 775], balance: [160, 1230], bet: [360, 850],
     betMinus: [200, 850], betPlus: [520, 850], spin: [360, 1120], turbo: [610, 1120], bonus: [360, 1020],
-    autoplayCount: [200, 950], autoplayToggle: [520, 950], autoplayStatus: [360, 900], resetBalance: [360, 1240], audio: [610, 130],
+    autoplayCount: [200, 950], autoplayToggle: [520, 950], autoplayStatus: [360, 900], resetBalance: [360, 1240], audio: [610, 130], rules: [660, 60],
   },
 };
 
@@ -52,6 +53,8 @@ export class Hud extends Container {
   #autoplayStatus = text('', 18, COLORS.textDim);
   #resetBalance = new Button({ label: 'BAKİYEYİ SIFIRLA', width: 220, height: 48, fontSize: 15 });
   #audio = new Button({ label: 'SES AÇIK', width: 130, height: 48, fontSize: 16 });
+  #rulesButton = new Button({ label: '?', width: 56, height: 56, fontSize: 32 });
+  #rulesPanel = new RulesPanel();
 
   #purchaseDialog = new Container();
   #purchaseShade = new Graphics();
@@ -81,9 +84,7 @@ export class Hud extends Container {
       this.#title, this.#free, this.#mult, this.#balance, this.#bet, this.#win,
       this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus,
       this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#resetBalance,
-      this.#audio,
-      this.#bannerShade, this.#banner,
-      this.#purchaseDialog,
+      this.#audio, this.#bannerShade, this.#banner, this.#rulesButton, this.#purchaseDialog, this.#rulesPanel,
     );
 
     this.#spin.on('press', () => this.emit('spin'));
@@ -95,6 +96,7 @@ export class Hud extends Container {
     this.#autoplayToggle.on('press', () => this.emit('autoplayToggle'));
     this.#resetBalance.on('press', () => this.emit('resetBalance'));
     this.#audio.on('press', () => this.emit('audioToggle'));
+    this.#rulesButton.on('press', () => this.#rulesPanel.toggle());
     this.#purchaseYes.on('press', () => this.#finishPurchase(true));
     this.#purchaseCancel.on('press', () => this.#finishPurchase(false));
     this.setWin(0);
@@ -120,6 +122,8 @@ export class Hud extends Container {
     place(this.#autoplayStatus, 'autoplayStatus');
     place(this.#resetBalance, 'resetBalance');
     place(this.#audio, 'audio');
+    place(this.#rulesButton, 'rules');
+    this.#rulesPanel.layout(orientation);
     this.#bannerShade.position.set(...p.banner);
     this.#bannerShade.clear().rect(-380, -70, 760, 140).fill({ color: 0x000000 });
 

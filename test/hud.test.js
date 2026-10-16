@@ -8,7 +8,7 @@ const { Hud } = await import('../src/view/Hud.js');
 
 test('bonus satın alma penceresi bedeli gösterir ve Evet/Vazgeç sonucunu döndürür', async () => {
   const hud = new Hud({});
-  const dialog = hud.children.at(-1);
+  const dialog = hud.children.find((item) => item.children?.some((child) => child.text === 'BONUS SATIN AL'));
 
   const accepted = hud.confirmBonusPurchase(200);
   assert.equal(dialog.visible, true);
@@ -67,4 +67,15 @@ test('ses düğmesi açık/kapalı tercihini görünür biçimde gösterir', () 
   assert.equal(audioButton.children[1].text, 'SES KAPALI');
   hud.setAudioEnabled(true);
   assert.equal(audioButton.children[1].text, 'SES AÇIK');
+});
+
+test('soru düğmesi kurallar ekranını açıp kapatır', () => {
+  const hud = new Hud({});
+  const rulesButton = hud.children[18];
+  const panel = hud.children.at(-1);
+  assert.equal(panel.visible, false);
+  rulesButton.emit('pointertap');
+  assert.equal(panel.visible, true);
+  rulesButton.emit('pointertap');
+  assert.equal(panel.visible, false);
 });
