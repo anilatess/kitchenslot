@@ -67,6 +67,7 @@ export class Game {
     this.#hud.on('betUp', () => state.changeBet(+1));
     this.#hud.on('betDown', () => state.changeBet(-1));
     this.#hud.on('turbo', () => state.toggleTurbo());
+    this.#hud.on('resetBalance', () => state.resetBalance());
     this.#hud.on('buyBonus', () => this.#buyBonus());
     this.#hud.on('autoplayCount', () => this.#autoplay.selectNext());
     this.#hud.on('autoplayToggle', () => this.#autoplay.running ? this.#autoplay.stop() : this.#autoplay.start());
@@ -81,6 +82,7 @@ export class Game {
   #syncHud() {
     const s = this.#state;
     this.#hud.setBalance(s.balance);
+    this.#hud.setBankrupt(s.isBankrupt);
     this.#hud.setBet(s.bet);
     this.#hud.setTurbo(s.turbo);
     this.#hud.setControls({

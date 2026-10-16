@@ -11,14 +11,14 @@ const POSITIONS = {
   landscape: {
     title: [640, 40], free: [640, 82], mult: [190, 329], banner: [640, 329],
     win: [640, 606], balance: [150, 668], bet: [640, 672],
-    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440], bonus: [1130, 330],
+    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440], bonus: [1130, 330], resetBalance: [150, 575],
     autoplayCount: [1040, 250], autoplayToggle: [1190, 250], autoplayStatus: [1115, 200],
   },
   portrait: {
     title: [360, 60], free: [360, 130], mult: [360, 205], banner: [360, 474],
     win: [360, 775], balance: [160, 1230], bet: [360, 850],
     betMinus: [200, 850], betPlus: [520, 850], spin: [360, 1120], turbo: [610, 1120], bonus: [360, 1020],
-    autoplayCount: [200, 950], autoplayToggle: [520, 950], autoplayStatus: [360, 900],
+    autoplayCount: [200, 950], autoplayToggle: [520, 950], autoplayStatus: [360, 900], resetBalance: [360, 1240],
   },
 };
 
@@ -50,6 +50,7 @@ export class Hud extends Container {
   #autoplayCount = new Button({ label: 'OTO ×10', width: 140, height: 52, fontSize: 18 });
   #autoplayToggle = new Button({ label: 'OTO BAŞLAT', width: 160, height: 52, fontSize: 17 });
   #autoplayStatus = text('', 18, COLORS.textDim);
+  #resetBalance = new Button({ label: 'BAKİYEYİ SIFIRLA', width: 220, height: 48, fontSize: 15 });
 
   #purchaseDialog = new Container();
   #purchaseShade = new Graphics();
@@ -78,7 +79,8 @@ export class Hud extends Container {
     this.addChild(
       this.#title, this.#free, this.#mult, this.#balance, this.#bet, this.#win,
       this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus,
-      this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#bannerShade, this.#banner,
+      this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#resetBalance,
+      this.#bannerShade, this.#banner,
       this.#purchaseDialog,
     );
 
@@ -89,6 +91,7 @@ export class Hud extends Container {
     this.#bonus.on('press', () => this.emit('buyBonus'));
     this.#autoplayCount.on('press', () => this.emit('autoplayCount'));
     this.#autoplayToggle.on('press', () => this.emit('autoplayToggle'));
+    this.#resetBalance.on('press', () => this.emit('resetBalance'));
     this.#purchaseYes.on('press', () => this.#finishPurchase(true));
     this.#purchaseCancel.on('press', () => this.#finishPurchase(false));
     this.setWin(0);
@@ -112,6 +115,7 @@ export class Hud extends Container {
     place(this.#autoplayCount, 'autoplayCount');
     place(this.#autoplayToggle, 'autoplayToggle');
     place(this.#autoplayStatus, 'autoplayStatus');
+    place(this.#resetBalance, 'resetBalance');
     this.#bannerShade.position.set(...p.banner);
     this.#bannerShade.clear().rect(-380, -70, 760, 140).fill({ color: 0x000000 });
 
@@ -131,6 +135,10 @@ export class Hud extends Container {
 
   setBalance(value) {
     this.#balance.text = fmt(value);
+  }
+
+  setBankrupt(isBankrupt) {
+    this.#resetBalance.visible = isBankrupt;
   }
 
   setBet(value) {

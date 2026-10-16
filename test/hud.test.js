@@ -45,3 +45,17 @@ test('autoplay HUD kalan dönüşü gösterir ve durdur düğmesini değiştirir
   assert.equal(toggleButton.children[1].text, 'OTO BAŞLAT');
   assert.equal(status.text, '');
 });
+
+test('bakiye sıfırlama düğmesi yalnızca bakiye bittiğinde görünür', () => {
+  const hud = new Hud({});
+  const resetButton = hud.children[14];
+  let clicked = false;
+  hud.on('resetBalance', () => { clicked = true; });
+
+  hud.setBankrupt(false);
+  assert.equal(resetButton.visible, false);
+  hud.setBankrupt(true);
+  assert.equal(resetButton.visible, true);
+  resetButton.emit('pointertap');
+  assert.equal(clicked, true);
+});

@@ -46,3 +46,54 @@ test('bonus satın alma yalnızca maliyet kadar bakiye varken ve meşgul değilk
   s.setBusy(true);
   assert.equal(s.canBuyBonus, false);
 });
+
+test('bakiye, bahis ve turbo localStorage üzerinden saklanıp geri yüklenir', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let stored = JSON.stringify({ balance: 45.75, betIndex: 3, turbo: true });
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { getItem: () => stored, setItem: (_key, value) => { stored = value; } },
+  });
+  try {
+    const state = new GameState();
+    assert.equal(state.balance, 45.75);
+    assert.equal(state.betIndex, 3);
+    assert.equal(state.turbo, true);
+
+    state.changeBet(+1);
+    state.toggleTurbo();
+    state.debit(5);
+    const restored = new GameState();
+    assert.equal(restored.balance, 40.75);
+    assert.equal(restored.betIndex, 4);
+    assert.equal(restored.turbo, false);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('bozuk veya erişilemeyen localStorage oyunu durdurmaz', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { getItem: () => '{bozuk', setItem: () => { throw new Error('kapalı'); } },
+  });
+  try {
+    const state = new GameState();
+    assert.equal(state.balance, START_BALANCE);
+    assert.doesNotThrow(() => state.toggleTurbo());
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('bakiye sıfırlama yalnızca başlangıç bakiyesini yükler ve durumdan çıkarır', () => {
+  const state = new GameState();
+  state.debit(START_BALANCE - 0.5);
+  assert.equal(state.isBankrupt, true);
+  state.resetBalance();
+  assert.equal(state.balance, START_BALANCE);
+  assert.equal(state.isBankrupt, false);
+});
