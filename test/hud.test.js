@@ -5,6 +5,7 @@ import * as fake from './helpers/fakePixi.js';
 mock.module('pixi.js', { namedExports: { Container: fake.Container, Graphics: fake.Graphics, Text: fake.Text, Sprite: fake.Sprite, Assets: fake.Assets } });
 
 const { Hud } = await import('../src/view/Hud.js');
+const { MobileMenu } = await import('../src/view/MobileMenu.js');
 
 const buttonWith = (hud, label) => hud.children.find((item) => item.children?.some((child) => child.text === label));
 
@@ -90,13 +91,17 @@ test('mobil kontroller büyür, yön değişince masaüstü ölçülerine döner
   const hud = new Hud({});
   const help = buttonWith(hud, '?');
   const minus = buttonWith(hud, '−');
-  const auto = buttonWith(hud, 'OTO BAŞLAT');
+  const menu = buttonWith(hud, '☰');
   hud.layout('portrait');
-  for (const button of [help, minus, auto]) {
+  for (const button of [menu, minus, buttonWith(hud, 'BONUS AL (100x)')]) {
     assert.ok(button.hitArea.contains(41, 41), '390px ekranda yaklaşık 45px dokunma alanı');
     assert.equal(button.hitArea.contains(0, 43), false);
   }
+  assert.equal(help.visible, false, 'yardım menüye taşınır');
+  assert.equal(menu.visible, true);
   hud.layout('landscape');
+  assert.equal(menu.visible, false);
+  assert.equal(help.visible, true);
   assert.equal(help.hitArea.contains(17, 0), false);
   assert.equal(minus.hitArea.contains(18, 0), false);
 });
@@ -157,7 +162,7 @@ test('BİTİR mevcut dönüşü tamamlamaya açılırken yeni bahis kontrolleri 
   assert.equal(spins, 1);
 });
 
-test('geçmiş ve ayarlar düğmeleri mobilde dokunulabilir; dönüş sırasında mola için erişilebilir', () => {
+test('mobilde yardımcı kontroller tek menüdedir; geçmiş ve ayarlar menü kapandıktan sonra açılır', () => {
   const hud = new Hud({});
   const history = buttonWith(hud, 'GEÇMİŞ');
   const settings = buttonWith(hud, 'AYARLAR');
@@ -166,14 +171,31 @@ test('geçmiş ve ayarlar düğmeleri mobilde dokunulabilir; dönüş sırasınd
   hud.on('settings', () => events.push('settings'));
   hud.layout('portrait');
   hud.setControls({ canSpin: false, canChangeBet: false });
-  assert.equal(history.enabled, true);
-  assert.equal(settings.enabled, true);
-  assert.equal(history.x, 166); assert.equal(settings.x, 350);
-  assert.equal(history.hitArea.height, 84); assert.equal(settings.hitArea.width, 164);
+  assert.equal(history.visible, false);
+  assert.equal(settings.visible, false);
+  const menu = hud.children.find(item => item instanceof MobileMenu);
+  const opener = buttonWith(hud, '☰');
+  for (const [label, event] of [['GEÇMİŞ', 'history'], ['SES AYARLARI', 'settings']]) {
+    opener.press();
+    assert.equal(hud.menuOpen, true);
+    assert.equal(hud.hasModal, true);
+    assert.equal(hud.accessibilityRoot, menu);
+    assert.equal(menu.accessibilityModal, true);
+    const action = buttonWith(menu, label);
+    assert.equal(action.enabled, true);
+    assert.ok(action.hitArea.width >= 230 && action.hitArea.height >= 80);
+    let closedBeforeAction = false;
+    hud.on(event, () => { closedBeforeAction = !hud.hasModal; });
+    action.press();
+    assert.equal(closedBeforeAction, true);
+  }
   assert.equal(buttonWith(hud, 'SES AÇIK').visible, false, 'mobilde ses ayarlar menüsündedir');
-  history.press(); settings.press();
   assert.deepEqual(events, ['history', 'settings']);
+  opener.press();
   hud.layout('landscape');
+  assert.equal(hud.menuOpen, false);
+  assert.equal(history.visible, true);
+  assert.equal(settings.visible, true);
   assert.equal(history.hitArea.width, 36);
   assert.equal(settings.hitArea.width, 36);
   assert.equal(history.accessibleLabel, 'Tur geçmişi');
@@ -197,30 +219,43 @@ test('kazanç formülü para tutarlarını ve tavan açıklamasını korur; yeni
   assert.equal(formula.text, '');
 });
 
-test('mobil bonusta şef büyür, kullanılmayan kontroller gizlenir; sonuçta tekrar açılır', async () => {
+test('mobilde şef her durumda büyük kalır; yalnızca ana kontroller görünür ve çakışmaz', async () => {
   const { ChefBonusView } = await import('../src/view/ChefBonusView.js');
   const hud = new Hud({});
   const chef = hud.children.find(item => item instanceof ChefBonusView);
   hud.layout('portrait');
-  const controls = ['BONUS AL (100x)', 'OTO ×10', 'OTO BAŞLAT'].map(value => buttonWith(hud, value));
-  assert.ok(controls.every(button => button.visible));
+  hud.setBankrupt(false);
+  const visible = () => hud.children.filter(item => item.isAccessibleButton && item.visible);
+  assert.equal(visible().length, 5, 'bahis−/+, bonus, SPIN ve menü');
+  const controls = visible();
+  const overlaps = (a, b) => Math.abs(a.x - b.x) < (a.hitArea.width + b.hitArea.width) / 2
+    && Math.abs(a.y - b.y) < (a.hitArea.height + b.hitArea.height) / 2;
+  for (let a = 0; a < controls.length; a++) for (let b = a + 1; b < controls.length; b++) {
+    assert.equal(overlaps(controls[a], controls[b]), false, 'dokunma alanları birbirine girmemeli');
+  }
+  for (const button of controls) {
+    assert.ok(button.x - button.hitArea.width / 2 >= 0 && button.x + button.hitArea.width / 2 <= 720);
+    assert.ok(button.y - button.hitArea.height / 2 >= 0 && button.y + button.hitArea.height / 2 <= 1280);
+  }
+  const target = { x: 190, y: 1146 };
+  assert.deepEqual(chef.collectionTarget, target);
   hud.setSpinMode('free'); hud.setMultiplier(25);
-  assert.deepEqual(chef.collectionTarget, { x: 220, y: 1170 });
-  assert.ok(controls.every(button => !button.visible));
-  assert.equal(buttonWith(hud, 'GEÇMİŞ').visible, true);
-  assert.equal(buttonWith(hud, 'AYARLAR').visible, true);
+  assert.deepEqual(chef.collectionTarget, target);
+  assert.equal(visible().length, 4);
+  assert.equal(buttonWith(hud, 'BONUS AL (100x)').visible, false);
+  assert.equal(buttonWith(hud, '☰').visible, true);
   hud.layout('landscape');
   assert.deepEqual(chef.collectionTarget, { x: 160, y: 400 });
-  assert.ok(controls.every(button => button.visible));
+  assert.equal(buttonWith(hud, 'OTO BAŞLAT').visible, true);
   hud.layout('portrait');
-  assert.deepEqual(chef.collectionTarget, { x: 220, y: 1170 });
+  assert.deepEqual(chef.collectionTarget, target);
   hud.finishRound(); hud.finishRound();
   assert.equal(chef.total, 25);
-  assert.deepEqual(chef.collectionTarget, { x: 146, y: 1236 });
-  assert.ok(controls.every(button => button.visible), 'yeni bonus hemen satın alınabilmeli');
+  assert.deepEqual(chef.collectionTarget, target);
+  assert.equal(buttonWith(hud, 'BONUS AL (100x)').visible, true);
   hud.beginRound();
   assert.equal(chef.total, 0);
-  assert.ok(controls.every(button => button.visible));
+  assert.deepEqual(chef.collectionTarget, target);
 });
 
 test('erişilebilir klavye odağı yalnızca açık ödeme, satın alma veya sonuç penceresine gider', async () => {

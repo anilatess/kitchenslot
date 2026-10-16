@@ -147,6 +147,10 @@ export class Game {
       if (this.#blocked || this.#hud.hasModal) return;
       this.#panels.openHistory(this.#state.history);
     });
+    this.#hud.on('menuChange', (open) => {
+      if (open) this.#autoplay?.stop();
+      this.#accessibility?.update();
+    });
     this.#hud.on('buyBonus', () => this.#buyBonus());
     this.#hud.on('autoplayCount', () => this.#autoplay.selectNext());
     this.#hud.on('autoplayToggle', () => {

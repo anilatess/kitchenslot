@@ -109,10 +109,8 @@ export class ChefBonusView extends Container {
 
   layout(orientation) {
     this.#portrait = orientation === 'portrait';
-    const mobileBonus = this.#portrait && this.#state.active;
     this.#pose = this.#portrait
-      ? mobileBonus ? { x: 220, y: 1121, w: 190, h: 253, floor: 1250, soup: 1170, size: 0.70 }
-        : { x: 146, y: 1207, w: 94, h: 126, floor: 1276, soup: 1236, size: 0.35 }
+      ? { x: 190, y: 1084, w: 240, h: 320, floor: 1260, soup: 1146, size: 0.89 }
       : { x: 160, y: 330, w: 270, h: 360, floor: 529, soup: 400, size: 1 };
     const p = this.#pose;
     this.#art.position.set(p.x, p.y);
@@ -120,14 +118,15 @@ export class ChefBonusView extends Container {
     if (this.#fallback) this.#fallback.scale.set(p.size);
     this.#shadow.position.set(p.x, p.floor + 2); this.#shadow.scale.set(p.size);
     this.#glow.position.set(p.x, p.floor - 10);
-    this.#caption.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1160 : this.#portrait ? 1169 : 552);
-    this.#number.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1190 : this.#portrait ? 1202 : 584);
-    this.#status.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1230 : this.#portrait ? 1235 : 619);
+    this.#caption.position.set(this.#portrait ? 530 : 160, this.#portrait ? 1204 : 552);
+    this.#number.position.set(this.#portrait ? 530 : 160, this.#portrait ? 1240 : 584);
+    this.#status.position.set(160, 619);
+    this.#status.visible = !this.#portrait;
     this.#caption.style ??= {}; this.#number.style ??= {};
-    this.#caption.style.fontSize = mobileBonus ? 20 : this.#portrait ? 16 : 12;
-    this.#number.style.fontSize = mobileBonus ? 48 : this.#portrait ? 36 : 44;
+    this.#caption.style.fontSize = this.#portrait ? 20 : 12;
+    this.#number.style.fontSize = this.#portrait ? 48 : 44;
     this.#status.style ??= {};
-    this.#status.style.fontSize = mobileBonus ? 18 : this.#portrait ? 15 : 11;
+    this.#status.style.fontSize = 11;
     this.update(0);
   }
 

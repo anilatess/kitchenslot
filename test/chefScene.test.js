@@ -25,18 +25,20 @@ test('çarpan tepkisi ödülü değiştirmez; ateş tencerenin altında kalır v
   assert.ok(chef.children.filter(child => child.label === 'soup-ripple').some(child => child.alpha > 0));
   chef.layout('portrait');
   assert.equal(chef.total, 250);
-  assert.deepEqual(chef.collectionTarget, { x: 220, y: 1170 });
-  assert.equal(art.children[0].width, 190);
-  assert.equal(art.children[0].height, 253);
-  assert.ok(art.y - art.children[0].height / 2 >= 990);
-  assert.ok(fire.children.every(flame => flame.y <= 1250));
+  assert.deepEqual(chef.collectionTarget, { x: 190, y: 1146 });
+  assert.equal(art.children[0].width, 240);
+  assert.equal(art.children[0].height, 320);
+  assert.ok(art.y - art.children[0].height / 2 > 900, 'şef bahis satırının altında kalmalı');
+  assert.ok(art.y + art.children[0].height / 2 < 1280, 'şef ekranın dışına taşmamalı');
+  assert.ok(fire.children.every(flame => flame.y <= 1260));
   chef.finishBonus();
-  assert.equal(art.children[0].width, 94, 'tamamlanan bonus yeni tur kontrollerine alan bırakır');
-  assert.deepEqual(chef.collectionTarget, { x: 146, y: 1236 });
+  assert.equal(art.children[0].width, 240, 'bonus bitince aşçı küçülmemeli');
+  assert.deepEqual(chef.collectionTarget, { x: 190, y: 1146 });
   chef.celebrate('mega');
   assert.equal(chef.total, 250);
   chef.resetRound();
   chef.update(0);
+  assert.equal(art.children[0].height, 320, 'ana oyunda da büyük kalmalı');
   assert.ok(fire.children.every(flame => flame.alpha === 0));
 });
 

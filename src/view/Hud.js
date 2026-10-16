@@ -6,6 +6,7 @@ import { Readout } from './Readout.js';
 import { RulesPanel } from './RulesPanel.js';
 import { ChefBonusView } from './ChefBonusView.js';
 import { FeatureOverlay } from './FeatureOverlay.js';
+import { MobileMenu } from './MobileMenu.js';
 
 const UI = { surface: 0x101b17, edge: 0xbda675, text: 0xf4f0e5, muted: 0x9aaa9e, gold: 0xdfc58a };
 const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -19,11 +20,11 @@ const POSITIONS = {
     audio: [1027, 192], history: [1096, 192], settings: [1144, 192], rules: [1196, 192], hint: [1095, 523],
   },
   portrait: {
-    title: [360, 60], free: [360, 137], mult: [522, 1101], banner: [360, 430],
+    title: [360, 60], free: [360, 137], mult: [530, 878], banner: [360, 430],
     win: [515, 754], balance: [205, 754], bet: [360, 817],
-    betMinus: [228, 817], betPlus: [492, 817], spin: [548, 1046],
-    turbo: [548, 914], bonus: [236, 1002], resetBalance: [205, 754],
-    autoplayCount: [140, 1092], autoplayToggle: [308, 1092], autoplayStatus: [360, 1154],
+    betMinus: [228, 817], betPlus: [492, 817], spin: [530, 1090],
+    turbo: [548, 914], bonus: [530, 936], resetBalance: [205, 754],
+    autoplayCount: [140, 1092], autoplayToggle: [308, 1092], autoplayStatus: [190, 884],
     audio: [176, 914], history: [166, 914], settings: [350, 914], rules: [624, 60], hint: [548, 1146],
   },
 };
@@ -38,6 +39,8 @@ export class Hud extends Container {
   #chef = new ChefBonusView();
   #portrait = false;
   #feature;
+  #mobileMenu = new MobileMenu();
+  #menuButton = new Button({ label: '☰', width: 84, height: 84, fontSize: 32, accessibleLabel: 'Oyun menüsü' });
   #stepLabel = text('', 18, UI.gold);
   #breakdownLabel = text('', 17, UI.gold);
   #stepToken = 0;
@@ -105,13 +108,21 @@ export class Hud extends Container {
       this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus,
       this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#resetBalance,
       this.#audio, this.#historyButton, this.#settingsButton, this.#stepLabel, this.#breakdownLabel,
-      this.#bannerShade, this.#banner, this.#rulesButton,
+      this.#bannerShade, this.#banner, this.#rulesButton, this.#menuButton, this.#mobileMenu,
       this.#purchaseDialog, this.#feature, this.#rulesPanel);
     const events = [[this.#spin, 'spin'], [this.#betMinus, 'betDown'], [this.#betPlus, 'betUp'],
       [this.#turbo, 'turbo'], [this.#bonus, 'buyBonus'], [this.#autoplayCount, 'autoplayCount'],
       [this.#autoplayToggle, 'autoplayToggle'], [this.#resetBalance, 'resetBalance'], [this.#audio, 'audioToggle'],
       [this.#historyButton, 'history'], [this.#settingsButton, 'settings']];
     events.forEach(([button, event]) => button.on('press', () => this.emit(event)));
+    this.#menuButton.on('press', () => {
+      if (!this.#rulesPanel.visible && !this.#purchaseDialog.visible && !this.#feature.visible) this.#mobileMenu.toggle();
+    });
+    this.#mobileMenu.on('visibilityChange', (open) => this.emit('menuChange', open));
+    this.#mobileMenu.on('action', (event) => {
+      if (event === 'rules') this.#rulesPanel.toggle();
+      else this.emit(event);
+    });
     this.#rulesButton.on('press', () => {
       if (!this.#purchaseDialog.visible && !this.#feature.visible) this.#rulesPanel.toggle();
     });
@@ -123,6 +134,8 @@ export class Hud extends Container {
   layout(orientation) {
     const p = POSITIONS[orientation];
     this.#portrait = orientation === 'portrait';
+    if (!this.#portrait) this.#mobileMenu.hide();
+    this.#mobileMenu.layout(orientation);
     this.#chef.layout(orientation);
     this.#feature.layout(orientation);
     this.#hint.visible = !this.#portrait && !this.#mult.text && this.#spinMode !== 'free';
@@ -130,12 +143,12 @@ export class Hud extends Container {
       [this.#autoplayToggle, 12, 22], [this.#audio, 11, 22], [this.#spin, 11, 18],
       [this.#betMinus, 22, 36], [this.#betPlus, 22, 36]]
       .forEach(([button, desktop, mobile]) => button.setFontSize(this.#portrait ? mobile : desktop));
-    [[this.#bonus, 220, 44, 304, 84], [this.#turbo, 220, 32, 164, 84],
+    [[this.#bonus, 220, 44, 280, 84], [this.#turbo, 220, 32, 164, 84],
       [this.#audio, 88, 32, 184, 84], [this.#rulesButton, 32, 32, 84, 84],
       [this.#historyButton, 36, 32, 164, 84], [this.#settingsButton, 36, 32, 164, 84],
       [this.#autoplayCount, 82, 36, 112, 84], [this.#autoplayToggle, 126, 36, 200, 84],
       [this.#betMinus, 34, 34, 84, 84], [this.#betPlus, 34, 34, 84, 84],
-      [this.#spin, 112, 112, 152, 152], [this.#resetBalance, 150, 34, 220, 84]]
+      [this.#spin, 112, 112, 168, 168], [this.#resetBalance, 150, 34, 220, 84]]
       .forEach(([button, dw, dh, mw, mh]) => button.setSize(this.#portrait ? mw : dw, this.#portrait ? mh : dh));
     this.#rulesButton.setFontSize(this.#portrait ? 32 : 20);
     this.#historyButton.setLabel(this.#portrait ? 'GEÇMİŞ' : '≡');
@@ -143,6 +156,12 @@ export class Hud extends Container {
     this.#historyButton.setFontSize(this.#portrait ? 22 : 22);
     this.#settingsButton.setFontSize(this.#portrait ? 21 : 21);
     this.#audio.visible = !this.#portrait;
+    this.#historyButton.visible = !this.#portrait;
+    this.#settingsButton.visible = !this.#portrait;
+    this.#rulesButton.visible = !this.#portrait;
+    this.#turbo.visible = !this.#portrait;
+    this.#menuButton.visible = this.#portrait;
+    this.#menuButton.position.set(624, 60);
     [this.#balance, this.#bet, this.#win].forEach((readout) => readout.setCaptionSize(this.#portrait ? 18 : 12));
     this.#balance.setValueSize(this.#portrait ? 32 : 26);
     this.#bet.setValueSize(this.#portrait ? 32 : 24);
@@ -208,7 +227,6 @@ export class Hud extends Container {
       surface(this.#statsPanel, 56, 706, 608, 152, 16);
       this.#statsPanel.rect(360, 731, 1, 43).fill({ color: UI.edge, alpha: 0.16 })
         .rect(80, 788, 560, 1).fill({ color: UI.edge, alpha: 0.12 });
-      surface(this.#controlPanel, 56, 864, 608, this.#chef.active ? 108 : 278, 18);
     } else {
       // The chef and the bonus pot occupy the reserved left area.
       surface(this.#statsPanel, 316, 622, 608, 66, 14);
@@ -249,7 +267,8 @@ export class Hud extends Container {
     this.#syncBonusControls();
   }
 
-  get hasModal() { return this.#rulesPanel.visible || this.#purchaseDialog.visible || this.#feature.visible; }
+  get hasModal() { return this.#rulesPanel.visible || this.#purchaseDialog.visible || this.#feature.visible || this.#mobileMenu.visible; }
+  get menuOpen() { return this.#mobileMenu.visible; }
   get rulesOpen() { return this.#rulesPanel.visible; }
   get purchaseOpen() { return this.#purchaseDialog.visible; }
   get featureOpen() { return this.#feature.visible; }
@@ -257,6 +276,7 @@ export class Hud extends Container {
     if (this.#rulesPanel.visible) return this.#rulesPanel;
     if (this.#purchaseDialog.visible) return this.#purchaseDialog;
     if (this.#feature.visible) return this.#feature;
+    if (this.#mobileMenu.visible) return this.#mobileMenu;
     return this;
   }
 
@@ -264,6 +284,7 @@ export class Hud extends Container {
     if (this.#rulesPanel.visible) { this.#rulesPanel.hide(); return true; }
     if (this.#purchaseDialog.visible) { this.#finishPurchase(false); return true; }
     if (this.#feature.visible) { this.#feature.dismiss(); return true; }
+    if (this.#mobileMenu.visible) { this.#mobileMenu.hide(); return true; }
     return false;
   }
 
@@ -409,6 +430,7 @@ export class Hud extends Container {
   }
 
   setAutoplay({ selected, remaining, running }) {
+    this.#mobileMenu.setAutoplay({ selected, remaining, running });
     this.#autoplayCount.setLabel(`OTO ×${selected}`);
     this.#autoplayToggle.setLabel(running ? 'DURDUR' : 'OTO BAŞLAT');
     this.#autoplayToggle.setSelected(running);
@@ -432,11 +454,13 @@ export class Hud extends Container {
   // ---------- Kontrol durumları ----------
 
   setTurbo(on) {
+    this.#mobileMenu.setTurbo(on);
     this.#turbo.setSelected(on);
     this.#turbo.setLabel(on ? 'TURBO AÇIK' : 'TURBO');
   }
 
   setControls({ canSpin, canFinishSpin = false, canChangeBet, canBuyBonus = false, canAutoplay = false, autoplayRunning = false }) {
+    this.#mobileMenu.setControls({ canChangeBet, canAutoplay, autoplayRunning });
     this.#spin.setEnabled(canSpin || canFinishSpin);
     this.#spin.setLabel(canFinishSpin ? 'BİTİR' : 'SPIN');
     this.#spin.setAccessibleLabel(canFinishSpin ? 'Bu dönüşün animasyonunu bitir' : 'Döndür');
@@ -452,9 +476,9 @@ export class Hud extends Container {
   #syncBonusControls() {
     const bonus = this.#portrait && this.#chef.active;
     this.#bonus.visible = !bonus;
-    this.#autoplayCount.visible = !bonus;
-    this.#autoplayToggle.visible = !bonus;
-    this.#autoplayStatus.visible = !bonus;
+    this.#autoplayCount.visible = !this.#portrait;
+    this.#autoplayToggle.visible = !this.#portrait;
+    this.#autoplayStatus.visible = true;
     this.#drawSurfaces(this.#portrait ? 'portrait' : 'landscape', POSITIONS[this.#portrait ? 'portrait' : 'landscape']);
   }
 }
