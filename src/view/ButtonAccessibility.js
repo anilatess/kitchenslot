@@ -12,6 +12,7 @@ export class ButtonAccessibility {
   #focusByRoot = new Map();
   #active = new Set();
   #clearPointerFocus;
+  #modalAvailable = false;
 
   constructor(stage, canvas, { getRoot = () => stage,
     getScreenSize = () => ({ width: canvas.clientWidth || canvas.width, height: canvas.clientHeight || canvas.height }) } = {}) {
@@ -77,9 +78,15 @@ export class ButtonAccessibility {
       Object.assign(element.style, { left: `${coordinates[0]}px`, top: `${coordinates[1]}px`,
         width: `${Math.max(1, coordinates[2])}px`, height: `${Math.max(1, coordinates[3])}px` });
     }
-    if (changed && initialized && root && (previousRoot || this.#focusByRoot.has(root) || root.accessibilityModal)) {
+    const enabled = [...this.#active].map((button) => this.#entries.get(button)).filter((element) => !element.disabled && !element.hidden);
+    const modalAvailable = !!root?.accessibilityModal && enabled.length > 0;
+    // Consecutive feature screens can reuse one modal while fading to zero alpha.
+    // Hiding its DOM control drops browser focus even though the root identity stays the same.
+    const modalReappeared = !changed && modalAvailable && !this.#modalAvailable && !enabled.includes(document.activeElement);
+    this.#modalAvailable = modalAvailable;
+    if (modalReappeared || (changed && initialized && root && (previousRoot || this.#focusByRoot.has(root) || root.accessibilityModal))) {
       const previous = this.#entries.get(this.#focusByRoot.get(root));
-      const first = [...this.#active].map((button) => this.#entries.get(button)).find((element) => !element.disabled && !element.hidden);
+      const first = enabled[0];
       const focus = previous && !previous.disabled && !previous.hidden ? previous : first;
       focus?.focus({ preventScroll: true });
     }

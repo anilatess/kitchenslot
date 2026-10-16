@@ -153,3 +153,34 @@ test('gizlenen ebeveynlerin kontrolleri kaldırılır; destroy DOM katmanını t
     assert.doesNotThrow(() => bridge.update());
   });
 });
+
+test('aynı modal kökü saydamlaşıp yeniden açıldığında yeni sonuç düğmesi odağı alır', () => {
+  fixture(({ doc, modal, makeButton, setRoot, bridge, layer, hud }) => {
+    const action = makeButton('DEVAM ET', modal);
+    modal.visible = true;
+    setRoot(modal);
+    bridge.update();
+    const continueButton = layer.children[1];
+    assert.equal(doc.activeElement, continueButton);
+    modal.alpha = 0;
+    bridge.update();
+    assert.equal(continueButton.hidden, true);
+    doc.activeElement = null; // Browser focus leaves a hidden native button.
+    action.setLabel('HARİKA, DEVAM ET');
+    modal.alpha = 1;
+    bridge.update();
+    assert.equal(doc.activeElement, continueButton);
+    assert.equal(continueButton.attributes['aria-label'], 'HARİKA, DEVAM ET');
+    const outside = doc.createElement('button');
+    outside.focus();
+    bridge.update();
+    assert.equal(doc.activeElement, outside, 'görünür modal her karede odağı yeniden çalmaz');
+    modal.visible = false;
+    setRoot(null);
+    bridge.update();
+    doc.activeElement = null;
+    setRoot(hud);
+    bridge.update();
+    assert.equal(doc.activeElement, null, 'ilk HUD görünürlüğü modal odak onarımını tetiklemez');
+  });
+});

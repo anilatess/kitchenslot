@@ -91,4 +91,4 @@ Varlıklar public/assets/chef/ altında; istem ve üretim notları SEF_ANIMASYON
 
 ## Son doğrulama
 
-Kullanım ve kayıt güncellemesinin tam test paketi: 129/129 başarılı, 0 hata/atlama. Üretim derlemesi başarılı. Gerçek tarayıcıda 1280×720 ve 390×844 görünümleri, hızlı tamamlama, geçmiş hesabı/kalıcılığı, ses düzeyi, klavye odağı, mobil bonus ve ikinci sekme koruması kontrol edildi. Bu güncelleme ödeme tablolarını, RNG'yi, sembol ağırlıklarını veya bonus kurallarını değiştirmez. Önceki sade ödeme oranlarının matematik karşılaştırması ORAN_NOTLARI.md içindedir.
+Kullanım ve kayıt güncellemesinin tam test paketi: 130/130 başarılı, 0 hata/atlama. Üretim derlemesi başarılı. Gerçek tarayıcıda 1280×720 ve 390×844 görünümleri, hızlı tamamlama, geçmiş hesabı/kalıcılığı, ses düzeyi, klavye odağı, mobil bonus ve ikinci sekme koruması kontrol edildi. Bu güncelleme ödeme tablolarını, RNG'yi, sembol ağırlıklarını veya bonus kurallarını değiştirmez. Önceki sade ödeme oranlarının matematik karşılaştırması ORAN_NOTLARI.md içindedir.
