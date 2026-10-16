@@ -1,5 +1,6 @@
 import { Emitter } from './Emitter.js';
 import { BETS, START_BALANCE } from './constants.js';
+import { RULES } from '../game/config.js';
 
 // Oyuncunun durumu. Görünüm bunu dinler ('change' olayı), kendisi görünümü bilmez.
 export class GameState extends Emitter {
@@ -14,6 +15,10 @@ export class GameState extends Emitter {
 
   get canSpin() {
     return !this.busy && this.balance >= this.bet;
+  }
+
+  get canBuyBonus() {
+    return !this.busy && this.balance >= this.bet * RULES.buyCost;
   }
 
   changeBet(direction) {

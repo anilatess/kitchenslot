@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { playRound } from '../game/engine.js';
+import { RULES } from '../game/config.js';
 import { createRng } from '../game/rng.js';
 import { Animator } from '../animation/Animator.js';
 import { RoundPlayer } from '../presenter/RoundPlayer.js';
@@ -56,6 +57,7 @@ export class Game {
     this.#hud.on('betUp', () => state.changeBet(+1));
     this.#hud.on('betDown', () => state.changeBet(-1));
     this.#hud.on('turbo', () => state.toggleTurbo());
+    this.#hud.on('buyBonus', () => this.#buyBonus());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
@@ -69,7 +71,7 @@ export class Game {
     this.#hud.setBalance(s.balance);
     this.#hud.setBet(s.bet);
     this.#hud.setTurbo(s.turbo);
-    this.#hud.setControls({ canSpin: s.canSpin, canChangeBet: !s.busy });
+    this.#hud.setControls({ canSpin: s.canSpin, canChangeBet: !s.busy, canBuyBonus: s.canBuyBonus });
     this.#animator.setTurbo(s.turbo);
   }
 
@@ -78,11 +80,31 @@ export class Game {
     if (!state.canSpin) return;
 
     state.setBusy(true);
-    state.debit(state.bet);
+    await this.#playRound(false);
+  }
+
+  async #buyBonus() {
+    const state = this.#state;
+    if (!state.canBuyBonus) return;
+
+    state.setBusy(true);
+    try {
+      const cost = state.bet * RULES.buyCost;
+      if (await this.#hud.confirmBonusPurchase(cost) && state.balance >= cost) {
+        await this.#playRound(true);
+      }
+    } finally {
+      if (state.busy) state.setBusy(false);
+    }
+  }
+
+  async #playRound(buy) {
+    const state = this.#state;
+    state.debit(state.bet * (buy ? RULES.buyCost : 1));
     this.#hud.setWin(0);
     this.#hud.setMultiplier(0);
     try {
-      const round = playRound(this.#rng, { record: true });
+      const round = playRound(this.#rng, { record: true, buy });
       const payout = await this.#player.play(round, state.bet);
       state.credit(payout);
     } finally {

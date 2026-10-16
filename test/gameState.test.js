@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GameState } from '../src/core/GameState.js';
 import { BETS, START_BALANCE } from '../src/core/constants.js';
+import { RULES } from '../src/game/config.js';
 
 test('bahis sınırlar içinde kalır', () => {
   const s = new GameState();
@@ -29,4 +30,19 @@ test('bakiye yetmiyorsa dönüş başlatılamaz; değişiklikler olay yayar', ()
   s.credit(10);
   assert.equal(s.canSpin, true);
   assert.equal(changes, 2);
+});
+
+test('bonus satın alma yalnızca maliyet kadar bakiye varken ve meşgul değilken açılır', () => {
+  const s = new GameState();
+  assert.equal(s.canBuyBonus, s.balance >= s.bet * RULES.buyCost);
+
+  while (s.bet < 10) s.changeBet(+1);
+  assert.equal(s.canBuyBonus, true);
+  s.debit(s.balance - s.bet * RULES.buyCost + 0.01);
+  assert.equal(s.canBuyBonus, false);
+
+  s.credit(1);
+  assert.equal(s.canBuyBonus, true);
+  s.setBusy(true);
+  assert.equal(s.canBuyBonus, false);
 });

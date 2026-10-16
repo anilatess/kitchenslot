@@ -15,7 +15,12 @@ export class Container {
     this.mask = null;
     this.parent = null;
     this.destroyed = false;
+    this.visible = true;
+    this.eventMode = 'none';
+    this.cursor = 'default';
+    this.#handlers = new Map();
   }
+  #handlers;
   get x() { return this.position.x; }
   set x(v) { this.position.x = v; }
   get y() { return this.position.y; }
@@ -23,6 +28,14 @@ export class Container {
   addChild(...items) {
     for (const item of items) { item.parent = this; this.children.push(item); }
     return items[0];
+  }
+  on(event, fn) {
+    if (!this.#handlers.has(event)) this.#handlers.set(event, new Set());
+    this.#handlers.get(event).add(fn);
+    return this;
+  }
+  emit(event, ...args) {
+    this.#handlers.get(event)?.forEach((fn) => fn(...args));
   }
   destroy() {
     this.destroyed = true;

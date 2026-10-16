@@ -11,12 +11,12 @@ const POSITIONS = {
   landscape: {
     title: [640, 40], free: [640, 82], mult: [190, 329], banner: [640, 329],
     win: [640, 606], balance: [150, 668], bet: [640, 672],
-    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440],
+    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440], bonus: [1130, 330],
   },
   portrait: {
     title: [360, 60], free: [360, 130], mult: [360, 205], banner: [360, 474],
     win: [360, 775], balance: [360, 1180], bet: [360, 885],
-    betMinus: [200, 885], betPlus: [520, 885], spin: [360, 1040], turbo: [610, 1040],
+    betMinus: [200, 885], betPlus: [520, 885], spin: [360, 1040], turbo: [610, 1040], bonus: [590, 960],
   },
 };
 
@@ -44,6 +44,16 @@ export class Hud extends Container {
   #betPlus = new Button({ label: '+', width: 64, height: 64, fontSize: 36 });
   #spin = new Button({ label: 'SPIN', width: 150, height: 150, fill: COLORS.spin, fontSize: 32 });
   #turbo = new Button({ label: 'TURBO', width: 130, height: 52, fontSize: 20 });
+  #bonus = new Button({ label: 'BONUS AL (100x)', width: 210, height: 52, fontSize: 16 });
+
+  #purchaseDialog = new Container();
+  #purchaseShade = new Graphics();
+  #purchasePanel = new Graphics();
+  #purchaseTitle = text('BONUS SATIN AL', 30, COLORS.gold);
+  #purchaseCost = text('', 24, COLORS.text);
+  #purchaseYes = new Button({ label: 'EVET', width: 170, height: 60, fill: COLORS.spin, fontSize: 22 });
+  #purchaseCancel = new Button({ label: 'VAZGEÇ', width: 170, height: 60, fontSize: 20 });
+  #resolvePurchase = null;
 
   constructor(animator) {
     super();
@@ -52,15 +62,27 @@ export class Hud extends Container {
     [this.#title, this.#free, this.#mult, this.#banner].forEach((t) => t.anchor.set(0.5));
     this.#banner.alpha = 0;
     this.#bannerShade.alpha = 0;
+    this.#purchaseDialog.visible = false;
+    this.#purchaseDialog.eventMode = 'static';
+    this.#purchaseShade.eventMode = 'static';
+    [this.#purchaseTitle, this.#purchaseCost].forEach((t) => t.anchor.set(0.5));
+    this.#purchaseDialog.addChild(
+      this.#purchaseShade, this.#purchasePanel, this.#purchaseTitle, this.#purchaseCost,
+      this.#purchaseYes, this.#purchaseCancel,
+    );
     this.addChild(
       this.#title, this.#free, this.#mult, this.#balance, this.#bet, this.#win,
-      this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bannerShade, this.#banner,
+      this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus, this.#bannerShade, this.#banner,
+      this.#purchaseDialog,
     );
 
     this.#spin.on('press', () => this.emit('spin'));
     this.#betMinus.on('press', () => this.emit('betDown'));
     this.#betPlus.on('press', () => this.emit('betUp'));
     this.#turbo.on('press', () => this.emit('turbo'));
+    this.#bonus.on('press', () => this.emit('buyBonus'));
+    this.#purchaseYes.on('press', () => this.#finishPurchase(true));
+    this.#purchaseCancel.on('press', () => this.#finishPurchase(false));
     this.setWin(0);
   }
 
@@ -78,8 +100,20 @@ export class Hud extends Container {
     place(this.#betPlus, 'betPlus');
     place(this.#spin, 'spin');
     place(this.#turbo, 'turbo');
+    place(this.#bonus, 'bonus');
     this.#bannerShade.position.set(...p.banner);
     this.#bannerShade.clear().rect(-380, -70, 760, 140).fill({ color: 0x000000 });
+
+    const design = orientation === 'landscape' ? { width: 1280, height: 720 } : { width: 720, height: 1280 };
+    const dialogWidth = orientation === 'landscape' ? 680 : 620;
+    this.#purchaseDialog.position.set(design.width / 2, design.height / 2);
+    this.#purchaseShade.clear().rect(-design.width / 2, -design.height / 2, design.width, design.height).fill({ color: 0x000000, alpha: 0.72 });
+    this.#purchasePanel.clear().roundRect(-dialogWidth / 2, -160, dialogWidth, 320, 24)
+      .fill({ color: COLORS.panel }).stroke({ width: 4, color: COLORS.panelEdge });
+    this.#purchaseTitle.position.set(0, -92);
+    this.#purchaseCost.position.set(0, -35);
+    this.#purchaseYes.position.set(-105, 82);
+    this.#purchaseCancel.position.set(105, 82);
   }
 
   // ---------- Değer göstergeleri ----------
@@ -119,6 +153,22 @@ export class Hud extends Container {
     this.#free.text = info ? `BEDAVA DÖNÜŞ  ${info.current} / ${info.total}` : '';
   }
 
+  /** Oyuncudan bonus satın alma onayı alır; iptal edilirse false döner. */
+  confirmBonusPurchase(cost) {
+    if (this.#resolvePurchase) return Promise.resolve(false);
+    this.#purchaseCost.text = `Bedel: ${fmt(cost)}`;
+    this.#purchaseDialog.visible = true;
+    return new Promise((resolve) => { this.#resolvePurchase = resolve; });
+  }
+
+  #finishPurchase(confirmed) {
+    const resolve = this.#resolvePurchase;
+    if (!resolve) return;
+    this.#resolvePurchase = null;
+    this.#purchaseDialog.visible = false;
+    resolve(confirmed);
+  }
+
   async showBanner(message, hold = TIMING.banner) {
     this.#banner.text = message;
     this.#banner.scale.set(0.6);
@@ -139,9 +189,10 @@ export class Hud extends Container {
     this.#turbo.setFill(on ? 0x2e9d6b : COLORS.button);
   }
 
-  setControls({ canSpin, canChangeBet }) {
+  setControls({ canSpin, canChangeBet, canBuyBonus = false }) {
     this.#spin.setEnabled(canSpin);
     this.#betMinus.setEnabled(canChangeBet);
     this.#betPlus.setEnabled(canChangeBet);
+    this.#bonus.setEnabled(canBuyBonus);
   }
 }
