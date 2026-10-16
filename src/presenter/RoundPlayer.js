@@ -7,6 +7,10 @@ export class RoundPlayer {
   #hud;
   #animator;
   #audio;
+  #playing = false;
+  #canSkip = false;
+  #segment = null;
+  #onSkippableChange = null;
 
   constructor({ grid, hud, animator, audio = null }) {
     this.#grid = grid;
@@ -15,8 +19,42 @@ export class RoundPlayer {
     this.#audio = audio;
   }
 
+  get isPlaying() { return this.#playing; }
+  get canSkip() { return this.#canSkip; }
+
+  /** Yeni bahis açmadan yalnızca sahnedeki dönüşü nihai sonucuna götürür. */
+  skipCurrentSpin() {
+    if (!this.#canSkip || !this.#animator.fastForwardSegment?.(this.#segment)) return false;
+    this.#setCanSkip(false);
+    return true;
+  }
+
+  #setCanSkip(value) {
+    if (this.#canSkip === value) return;
+    this.#canSkip = value;
+    this.#onSkippableChange?.(value);
+  }
+
   /** Tamamlanmış dönüşler atlanabilir; onProgress yalnızca dönüş sınırında çağrılır. */
-  async play(round, bet, { startSpin = 0, onProgress } = {}) {
+  async play(round, bet, { startSpin = 0, onProgress, onSkippableChange } = {}) {
+    if (this.#playing) throw new Error('Tur sunumu zaten sürüyor.');
+    this.#playing = true;
+    this.#onSkippableChange = onSkippableChange;
+    try {
+      return await this.#playRound(round, bet, { startSpin, onProgress });
+    } finally {
+      try {
+        this.#setCanSkip(false);
+      } finally {
+        this.#animator.endSegment?.(this.#segment);
+        this.#segment = null;
+        this.#onSkippableChange = null;
+        this.#playing = false;
+      }
+    }
+  }
+
+  async #playRound(round, bet, { startSpin, onProgress }) {
     const start = Number.isInteger(startSpin) ? Math.max(0, Math.min(startSpin, round.spins.length)) : 0;
     const limit = round.total;
     this.#hud.beginRound?.();
@@ -62,7 +100,15 @@ export class RoundPlayer {
         this.#hud.setFreeSpins({ current: freeIndex, total: freeIndex + freeLeft });
       }
 
-      roundWin = await this.#playSpin(spin, bet, roundWin, limit);
+      this.#segment = this.#animator.beginSegment?.() ?? null;
+      this.#setCanSkip(typeof this.#animator.fastForwardSegment === 'function');
+      try {
+        roundWin = await this.#playSpin(spin, bet, roundWin, limit);
+      } finally {
+        this.#setCanSkip(false);
+        this.#animator.endSegment?.(this.#segment);
+        this.#segment = null;
+      }
 
       if (spin.mode === 'free') {
         freeMult = spin.freeMult;
@@ -103,6 +149,7 @@ export class RoundPlayer {
   }
 
   async #playSpin(spin, bet, winBefore, roundLimit) {
+    this.#hud.clearSpinBreakdown?.();
     this.#audio?.play('spin');
     this.#audio?.play('drop');
     await this.#grid.dropIn(spin.initialGrid);
@@ -142,6 +189,15 @@ export class RoundPlayer {
       this.#audio?.play(spin.appliedMult > 1 ? 'multiplyWin' : 'tumbleWin');
       await this.#hud.countWinTo(spinTarget * bet);
     }
+    const payout = (spinTarget - winBefore) * bet;
+    const rawAmount = spin.raw * bet;
+    const unboundedPayout = rawAmount * spin.appliedMult;
+    this.#hud.showSpinBreakdown?.({
+      raw: rawAmount, multiplier: spin.appliedMult, payout,
+      capped: payout + 1e-9 * Math.max(1, unboundedPayout) < unboundedPayout,
+      mode: spin.mode,
+      wins: spin.steps.flatMap((step) => (step.wins ?? []).map((win) => ({ ...win, pay: win.pay * bet }))),
+    });
     await this.#animator.wait(TIMING.stepGap);
     return spinTarget;
   }

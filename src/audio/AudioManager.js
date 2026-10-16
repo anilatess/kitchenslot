@@ -1,4 +1,5 @@
 const PREFERENCE_KEY = 'mutfak-slot.audio-enabled.v1';
+const VOLUME_KEY = 'mutfak-slot.audio-volume.v1';
 const MAX_VOICES = 20;
 const COOLDOWN = { spin: 0.08, drop: 0.055, burst: 0.095, multiplier: 0.09, sizzle: 0.24, tumbleWin: 0.15 };
 
@@ -62,6 +63,9 @@ export class AudioManager {
   #createContext;
   #context = null;
   #enabled = this.#readPreference();
+  #volume = this.#readVolume();
+  #masterGain = null;
+  #suspended = false;
   #voices = new Set();
   #lastPlayed = new Map();
   #sizzleBuffer = null;
@@ -77,15 +81,40 @@ export class AudioManager {
     return this.#enabled;
   }
 
+  get volume() {
+    return this.#volume;
+  }
+
+  /** Sekme odağı/kullanım kilidi için geçici sessizlik; kullanıcının tercihi korunur. */
+  setSuspended(value) {
+    this.#suspended = !!value;
+    if (this.#suspended) this.#stopAll();
+  }
+
+  /** Sesi kapatmak tercih edilen düzeyi değiştirmez; tüm aktif efektler aynı ana kazancı kullanır. */
+  setVolume(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return this.#volume;
+    this.#volume = Math.min(1, Math.max(0, value));
+    try { globalThis.localStorage?.setItem(VOLUME_KEY, String(this.#volume)); } catch { /* Tercih saklanamasa da ses çalışır. */ }
+    this.#applyVolume();
+    return this.#volume;
+  }
+
   /** İlk kullanıcı eylemi sırasında çağrılarak tarayıcı ses kilidini açar. */
   unlock() {
-    if (!this.#enabled) return;
+    if (!this.#enabled || this.#suspended) return;
     try {
       this.#context ??= this.#createContext();
+      if (this.#context && !this.#masterGain) {
+        this.#masterGain = this.#context.createGain();
+        this.#masterGain.connect(this.#context.destination);
+        this.#applyVolume();
+      }
       const resumed = this.#context?.resume?.();
       resumed?.catch?.(() => {});
     } catch {
       this.#context = null;
+      this.#masterGain = null;
     }
   }
 
@@ -101,7 +130,7 @@ export class AudioManager {
   }
 
   play(name) {
-    if (!this.#enabled || !this.#context) return;
+    if (!this.#enabled || this.#suspended || !this.#context || this.#volume === 0) return;
     const now = this.#context.currentTime;
     const last = this.#lastPlayed.get(name) ?? -Infinity;
     if (now - last < (COOLDOWN[name] ?? 0.08)) return;
@@ -128,7 +157,7 @@ export class AudioManager {
       gain.gain.linearRampToValueAtTime(volume, start + 0.012);
       gain.gain.linearRampToValueAtTime(0.0001, start + duration);
       source.connect(gain);
-      gain.connect(context.destination);
+      gain.connect(this.#masterGain ?? context.destination);
       voice = { source, gain, end: start + duration + 0.015 };
       this.#voices.add(voice);
       source.onended = () => this.#release(voice);
@@ -177,6 +206,22 @@ export class AudioManager {
       return globalThis.localStorage?.getItem(PREFERENCE_KEY) !== 'false';
     } catch {
       return true;
+    }
+  }
+
+  #applyVolume() {
+    if (!this.#masterGain || !this.#context) return;
+    try { this.#masterGain.gain.setValueAtTime(this.#volume, this.#context.currentTime); } catch { /* Ses aygıtı kapanmış olabilir. */ }
+  }
+
+  #readVolume() {
+    try {
+      const stored = globalThis.localStorage?.getItem(VOLUME_KEY);
+      if (stored == null || stored.trim() === '') return 1;
+      const value = Number(stored);
+      return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+    } catch {
+      return 1;
     }
   }
 }

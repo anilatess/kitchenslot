@@ -109,36 +109,45 @@ export class ChefBonusView extends Container {
 
   layout(orientation) {
     this.#portrait = orientation === 'portrait';
+    const mobileBonus = this.#portrait && this.#state.active;
     this.#pose = this.#portrait
-      ? { x: 146, y: 1207, w: 94, h: 126, floor: 1276, soup: 1236, size: 0.35 }
+      ? mobileBonus ? { x: 220, y: 1121, w: 190, h: 253, floor: 1250, soup: 1170, size: 0.70 }
+        : { x: 146, y: 1207, w: 94, h: 126, floor: 1276, soup: 1236, size: 0.35 }
       : { x: 160, y: 330, w: 270, h: 360, floor: 529, soup: 400, size: 1 };
     const p = this.#pose;
     this.#art.position.set(p.x, p.y);
     for (const pose of this.#poses) { pose.width = p.w; pose.height = p.h; }
-    if (this.#fallback) this.#fallback.scale.set(this.#portrait ? 0.35 : 1);
+    if (this.#fallback) this.#fallback.scale.set(p.size);
     this.#shadow.position.set(p.x, p.floor + 2); this.#shadow.scale.set(p.size);
     this.#glow.position.set(p.x, p.floor - 10);
-    this.#caption.position.set(this.#portrait ? 410 : 160, this.#portrait ? 1169 : 552);
-    this.#number.position.set(this.#portrait ? 410 : 160, this.#portrait ? 1202 : 584);
-    this.#status.position.set(this.#portrait ? 410 : 160, this.#portrait ? 1235 : 619);
+    this.#caption.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1160 : this.#portrait ? 1169 : 552);
+    this.#number.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1190 : this.#portrait ? 1202 : 584);
+    this.#status.position.set(mobileBonus ? 510 : this.#portrait ? 410 : 160, mobileBonus ? 1230 : this.#portrait ? 1235 : 619);
     this.#caption.style ??= {}; this.#number.style ??= {};
-    this.#caption.style.fontSize = this.#portrait ? 16 : 12;
-    this.#number.style.fontSize = this.#portrait ? 36 : 44;
+    this.#caption.style.fontSize = mobileBonus ? 20 : this.#portrait ? 16 : 12;
+    this.#number.style.fontSize = mobileBonus ? 48 : this.#portrait ? 36 : 44;
     this.#status.style ??= {};
-    this.#status.style.fontSize = this.#portrait ? 15 : 11;
+    this.#status.style.fontSize = mobileBonus ? 18 : this.#portrait ? 15 : 11;
     this.update(0);
   }
 
   resetRound() {
     this.#state.resetRound(); this.#heat = 0; this.#impact = 0;
     this.#reactionAge = 10; this.#celebration = 0; this.#syncText();
+    this.layout(this.#portrait ? 'portrait' : 'landscape');
   }
-  startBonus() { this.#state.startBonus(); this.celebrate('bonus'); this.#syncText(); }
+  startBonus() {
+    this.#state.startBonus(); this.celebrate('bonus'); this.#syncText();
+    this.layout(this.#portrait ? 'portrait' : 'landscape');
+  }
   setTotal(value) {
     if (this.#state.setTotal(value)) this.#impact = Math.max(this.#impact, 0.45);
     this.#syncText();
   }
-  finishBonus() { this.#state.finishBonus(); this.#syncText(); }
+  finishBonus() {
+    this.#state.finishBonus(); this.#syncText();
+    this.layout(this.#portrait ? 'portrait' : 'landscape');
+  }
   collectPulse() {
     if (this.#state.phase === 'idle') return;
     this.#impact = 1;

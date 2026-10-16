@@ -23,6 +23,12 @@ npm run sim:big   # 10 milyon turluk simülasyon
 ## Oynanış
 
 - **SPIN** veya **Boşluk** ile döndür; `+` / `−` ile bahsi değiştir.
+- Dönüş sürerken **BİTİR** veya **Boşluk**, yalnızca mevcut dönüşün animasyonlarını tamamlar. Yeni bahis açmaz; bonusun sonraki dönüşü normal devam eder.
+- Her dönüşün altında eşleşme tutarı × çarpan = ödeme gösterilir. Kazanç tavanı uygulandıysa ayrıca belirtilir.
+- **Geçmiş** son 20 tamamlanan turun bahis, maliyet, net sonuç ve dönüş başına ödeme hesabını gösterir. Geçmiş aynı tarayıcıda saklanır.
+- **Ayarlar** içinden ses açılıp kapatılır ve düzeyi değiştirilir. Tab ile düğmeler arasında geçilir, Enter ile kullanılır; Escape açık pencereyi kapatır.
+- Oyun aynı site adresinde tek sekmede çalışır. İkinci sekme bakiyeyi değiştiremez; ilk sekme kapandıktan sonra yenilenerek devam edilebilir.
+- Sekme gizlenince veya ayarlar/geçmiş açılınca sunum ve ses duraklar, otomatik oyun durur. Kapatıp geri dönünce kayıtlı dönüş devam eder.
 - **TURBO** animasyonları hızlandırır. Tercihler ve bakiye yerel tarayıcıda saklanır.
 - Soldan başlayan en az üç makarada eşleşmeler ways-to-win ile kazanır. Kazanan semboller patlar, üsttekiler düşer ve yeni semboller gelir (tumble).
 - Wild yalnızca 2–4. makaralarda çıkar. Scatter 3 veya daha fazla geldiğinde 10 bedava dönüş verir; bedava dönüşte tetiklenirse 5 dönüş ekler. Bedava dönüş çarpanları bonus boyunca birikir.
@@ -43,7 +49,7 @@ public/assets/kitchen-realistic.png gerçekçi mutfak sahnesidir. Arka plan ekra
 
 ## Ses ve görseller
 
-Sesler `src/audio/AudioManager.js` içindeki WebAudio osilatörleriyle koddan üretilir; harici ses dosyası veya üçüncü taraf kaynak kullanılmaz. Tarayıcıların otomatik oynatma kısıtına uymak için ses ilk kullanıcı etkileşiminden sonra başlar. Ses tercihi diğer oyun tercihleriyle birlikte saklanır.
+Sesler `src/audio/AudioManager.js` içindeki WebAudio osilatörleriyle koddan üretilir; harici ses dosyası veya üçüncü taraf kaynak kullanılmaz. Tarayıcıların otomatik oynatma kısıtına uymak için ses ilk kullanıcı etkileşiminden sonra başlar. Açık/kapalı tercihi ve ses düzeyi ayrı saklanır; sesi kapatmak seçilen düzeyi silmez.
 
 Semboller varsayılan olarak kullanıcının PNG setiyle gösterilir; PNG bulunamazsa atlas, o da yoksa emoji ve çizilmiş karo görünümü kullanılır. İsteğe bağlı atlas, `public/assets/symbols.json` konumunda Pixi spritesheet JSON'u ve aynı klasörde kare görselleri olarak sağlanabilir. Tanınan kare adları: `tomato`, `garlic`, `pepper`, `carrot`, `dumpling`, `sushi`, `steak`, `onion`, `mushroom`, `chef`, `pot`, `multiplier` (uzantılı veya uzantısız). Atlas açılışta `Assets.load` ile yüklenir; dosya veya kare yoksa ilgili sembol emoji görünümüne düşer. Atlas olmadığı durumda da oyun normal açılır.
 
@@ -79,10 +85,10 @@ Sadeleştirme öncesi/sonrası eşleştirilmiş kontrol: aynı tur tohumlarıyla
 
 ## Şef ve bonus tenceresi
 
-Soldaki şef sekiz karelik bir karıştırma döngüsü oynatır. Bedava dönüşlerde toplanan çarpanlar tencereye uçar; tencerenin altındaki ateş, parıltı ve kıvılcımlar birikimli toplamla güçlenir. Sayı, RoundPlayer tarafından motorun kaydettiği freeMult/collected verilerinden gösterilir; yeni ödeme veya çarpan kuralı eklenmez. Ana oyun çarpanı sağdaki eski göstergede kalır. Bonus sonunda son toplam görünür; yeni turda sıfırlanır. Telefon görünümünde şef, kontrollerin altında küçük bir sahne olarak yer alır.
+Soldaki şef sekiz karelik bir karıştırma döngüsü oynatır. Bedava dönüşlerde toplanan çarpanlar tencereye uçar; tencerenin altındaki ateş, parıltı ve kıvılcımlar birikimli toplamla güçlenir. Sayı, RoundPlayer tarafından motorun kaydettiği freeMult/collected verilerinden gösterilir; yeni ödeme veya çarpan kuralı eklenmez. Ana oyun çarpanı sağdaki göstergede kalır. Bonus sonunda son toplam görünür; yeni turda sıfırlanır. Telefon görünümünde aktif bonus sırasında şef ve çarpan büyür; kullanılmayan bonus/otomatik oyun düğmeleri yer açar. Bonus bitince kontroller geri gelir.
 
 Varlıklar public/assets/chef/ altında; istem ve üretim notları SEF_ANIMASYON_NOTLARI.md içinde. Hareketi azaltma tercihi açıksa animasyon ve hareketli efektler sakinleşir. Sprite yüklenemezse emoji yedeği gösterilir; tencere sayacı çalışır.
 
 ## Son doğrulama
 
-Sade oranlar güncellemesinin tam test paketi: 86/86 başarılı, 0 hata/atlama. Üretim derlemesi başarılı. Gerçek tarayıcıda 1280×720 ve 390×844 ödeme sekmeleri ve doğru oranlar kontrol edildi; tarayıcı hata/uyarı günlüğü boş. Önceki ödeme kaydının yeni sürümde aynı tutarla ve yalnız bir kez tamamlandığı ayrıca doğrulandı. Bu güncellemede ödeme tabloları değiştirildi; RNG, sembol ağırlıkları ve bonus kuralları korundu. Matematik karşılaştırması ORAN_NOTLARI.md, güncel doğrulama DOGRULAMA_SADE_ORANLAR.txt içindedir. DOGRULAMA_KALITE.txt önceki görsel sürümün sonuçlarını saklar.
+Kullanım ve kayıt güncellemesinin tam test paketi: 129/129 başarılı, 0 hata/atlama. Üretim derlemesi başarılı. Gerçek tarayıcıda 1280×720 ve 390×844 görünümleri, hızlı tamamlama, geçmiş hesabı/kalıcılığı, ses düzeyi, klavye odağı, mobil bonus ve ikinci sekme koruması kontrol edildi. Bu güncelleme ödeme tablolarını, RNG'yi, sembol ağırlıklarını veya bonus kurallarını değiştirmez. Önceki sade ödeme oranlarının matematik karşılaştırması ORAN_NOTLARI.md içindedir.

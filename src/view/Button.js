@@ -5,22 +5,28 @@ const mix = (color, light, amount) => {
   return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 };
 
+const spokenLabel = (label) => ({ '?': 'Ödeme tablosu ve oyun kuralları', '+': 'Bahsi artır', '−': 'Bahsi azalt', SPIN: 'Döndür' }[label] ?? label);
+
 /** Matte controls with a single accent treatment for the main action. */
 export class Button extends Container {
   #glow = new Graphics();
   #shadow = new Graphics();
   #bg = new Graphics();
   #detail = new Graphics();
+  #focus = new Graphics();
   #label;
   #arrow;
   #width; #height; #radius; #fill; #border; #variant;
   #enabled = true;
   #hover = false;
   #selected = false;
+  #selectable = false;
+  #keyboardFocused = false;
+  #accessibleLabel;
   #phase = 0;
 
   constructor({ label, width, height, radius = 12, fill = 0x1c2824, color = 0xf3f0e7,
-    border = 0xb7a16f, fontSize = 20, variant = 'default', glow = false }) {
+    border = 0xb7a16f, fontSize = 20, variant = 'default', glow = false, accessibleLabel = null }) {
     super();
     this.#width = width;
     this.#height = height;
@@ -28,6 +34,8 @@ export class Button extends Container {
     this.#fill = fill;
     this.#border = border;
     this.#variant = variant === 'spin' || glow ? 'spin' : variant;
+    this.#accessibleLabel = accessibleLabel;
+    this.isAccessibleButton = true;
     this.#label = new Text({ text: label, style: {
       fontFamily: 'system-ui, sans-serif', fontSize,
       fontWeight: this.#variant === 'spin' ? '800' : '600', fill: color,
@@ -45,8 +53,8 @@ export class Button extends Container {
       this.#label.y = 44 * (width / 156);
       this.addChild(arrow);
     }
-    this.addChild(this.#label);
-    this.#redraw();
+    this.addChild(this.#label, this.#focus);
+    this.setSize(width, height, radius);
     this.eventMode = 'static';
     this.cursor = 'pointer';
     this.on('pointerdown', () => { if (this.#enabled) this.scale.set(0.97); });
@@ -64,16 +72,28 @@ export class Button extends Container {
       this.scale.set(1);
       this.#redraw();
     });
-    this.on('pointertap', () => { if (this.#enabled) this.emit('press'); });
+    this.on('pointertap', () => this.press());
   }
 
+  get enabled() { return this.#enabled; }
+  get accessibleLabel() { return this.#accessibleLabel ?? spokenLabel(this.#label.text); }
+  get selected() { return this.#selectable ? this.#selected : null; }
+  press() { if (this.#enabled) this.emit('press'); }
+  setKeyboardFocused(value) {
+    const focused = !!value && this.#enabled;
+    if (focused === this.#keyboardFocused) return;
+    this.#keyboardFocused = focused;
+    this.#redraw();
+  }
+  setAccessibleLabel(value) { this.#accessibleLabel = value; }
   setLabel(value) { this.#label.text = value; }
   setSize(width, height, radius = this.#radius) {
     this.#width = width;
     this.#height = height;
     this.#radius = radius;
     // Hit testing follows the visible control, including after orientation changes.
-    this.hitArea = { contains: (x, y) => Math.abs(x) <= width / 2 && Math.abs(y) <= height / 2 };
+    this.hitArea = { x: -width / 2, y: -height / 2, width, height,
+      contains: (x, y) => Math.abs(x) <= width / 2 && Math.abs(y) <= height / 2 };
     if (this.#arrow) {
       this.#arrow.style ??= {};
       this.#arrow.style.fontSize = 99 * (width / 156);
@@ -88,15 +108,17 @@ export class Button extends Container {
   }
   setFill(value) { this.#fill = value; this.#redraw(); }
   setSelected(value) {
+    this.#selectable = true;
     if (this.#selected === value) return;
     this.#selected = value;
     this.#redraw();
   }
   setEnabled(value) {
-    this.#enabled = value;
+    this.#enabled = !!value;
     this.alpha = value ? 1 : 0.45;
     this.cursor = value ? 'pointer' : 'default';
-    if (!value) { this.#hover = false; this.scale.set(1); }
+    if (!value) { this.#hover = false; this.#keyboardFocused = false; this.scale.set(1); }
+    this.#redraw();
   }
   update(deltaMS) {
     if (this.#variant !== 'spin') return;
@@ -106,7 +128,12 @@ export class Button extends Container {
 
   #redraw() {
     const w = this.#width, h = this.#height;
-    this.#glow.clear(); this.#shadow.clear(); this.#bg.clear(); this.#detail.clear();
+    this.#glow.clear(); this.#shadow.clear(); this.#bg.clear(); this.#detail.clear(); this.#focus.clear();
+    if (this.#keyboardFocused) {
+      if (this.#variant === 'spin') this.#focus.circle(0, 0, w / 2 + 7).stroke({ width: 3, color: 0xf4d58b });
+      else this.#focus.roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, this.#radius + 4)
+        .stroke({ width: 3, color: 0xf4d58b });
+    }
     if (this.#variant === 'spin') {
       const r = w / 2;
       this.#glow.circle(0, 0, r + 8).stroke({ width: 10, color: 0xd9be7f, alpha: 0.09 });

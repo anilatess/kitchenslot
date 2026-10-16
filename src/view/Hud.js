@@ -16,7 +16,7 @@ const POSITIONS = {
     betMinus: [535, 656], betPlus: [705, 656], spin: [1095, 438],
     turbo: [1095, 347], bonus: [1095, 244], resetBalance: [405, 656],
     autoplayCount: [1024, 299], autoplayToggle: [1142, 299], autoplayStatus: [1095, 372],
-    audio: [1050, 192], rules: [1196, 192], hint: [1095, 523],
+    audio: [1027, 192], history: [1096, 192], settings: [1144, 192], rules: [1196, 192], hint: [1095, 523],
   },
   portrait: {
     title: [360, 60], free: [360, 137], mult: [522, 1101], banner: [360, 430],
@@ -24,7 +24,7 @@ const POSITIONS = {
     betMinus: [228, 817], betPlus: [492, 817], spin: [548, 1046],
     turbo: [548, 914], bonus: [236, 1002], resetBalance: [205, 754],
     autoplayCount: [140, 1092], autoplayToggle: [308, 1092], autoplayStatus: [360, 1154],
-    audio: [176, 914], rules: [350, 914], hint: [548, 1146],
+    audio: [176, 914], history: [166, 914], settings: [350, 914], rules: [624, 60], hint: [548, 1146],
   },
 };
 const text = (value, size, fill, extra = {}) => new Text({ text: value, style: {
@@ -39,6 +39,7 @@ export class Hud extends Container {
   #portrait = false;
   #feature;
   #stepLabel = text('', 18, UI.gold);
+  #breakdownLabel = text('', 17, UI.gold);
   #stepToken = 0;
   #title = text('MUTFAK SLOT', 38, UI.text, { fontFamily: 'Georgia, serif', fontWeight: '700', letterSpacing: 3 });
   #subtitle = text('TAZE SEMBOLLER · SICAK KAZANÇLAR', 12, UI.gold, { letterSpacing: 2 });
@@ -64,6 +65,8 @@ export class Hud extends Container {
   #autoplayStatus = text('', 12, UI.muted);
   #resetBalance = new Button({ label: 'BAKİYEYİ SIFIRLA', width: 150, height: 34, fontSize: 10 });
   #audio = new Button({ label: 'SES AÇIK', width: 132, height: 32, fontSize: 12 });
+  #historyButton = new Button({ label: 'GEÇMİŞ', width: 36, height: 32, fontSize: 18, accessibleLabel: 'Tur geçmişi' });
+  #settingsButton = new Button({ label: 'AYARLAR', width: 36, height: 32, fontSize: 18, accessibleLabel: 'Ses ve oyun ayarları' });
   #rulesButton = new Button({ label: '?', width: 32, height: 32, fontSize: 20 });
   #rulesPanel = new RulesPanel();
 
@@ -80,12 +83,17 @@ export class Hud extends Container {
     super();
     this.#animator = animator;
     this.#feature = new FeatureOverlay(animator);
+    [this.#rulesPanel, this.#purchaseDialog, this.#feature]
+      .forEach((panel) => { panel.accessibilityModal = true; });
     [this.#title, this.#subtitle, this.#free, this.#mult, this.#hint, this.#banner, this.#autoplayStatus]
       .forEach((item) => item.anchor.set(0.5));
     this.#banner.alpha = 0;
     this.#bannerShade.alpha = 0;
     this.#stepLabel.anchor.set(0.5);
     this.#stepLabel.alpha = 0;
+    this.#breakdownLabel.anchor.set(0.5);
+    this.#breakdownLabel.visible = false;
+    this.#breakdownLabel.label = 'spin-breakdown';
     this.#purchaseDialog.visible = false;
     this.#purchaseDialog.eventMode = 'static';
     this.#purchaseShade.eventMode = 'static';
@@ -96,11 +104,13 @@ export class Hud extends Container {
       this.#title, this.#subtitle, this.#free, this.#mult, this.#hint, this.#balance, this.#bet, this.#win,
       this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus,
       this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#resetBalance,
-      this.#audio, this.#stepLabel, this.#bannerShade, this.#banner, this.#rulesButton,
+      this.#audio, this.#historyButton, this.#settingsButton, this.#stepLabel, this.#breakdownLabel,
+      this.#bannerShade, this.#banner, this.#rulesButton,
       this.#purchaseDialog, this.#feature, this.#rulesPanel);
     const events = [[this.#spin, 'spin'], [this.#betMinus, 'betDown'], [this.#betPlus, 'betUp'],
       [this.#turbo, 'turbo'], [this.#bonus, 'buyBonus'], [this.#autoplayCount, 'autoplayCount'],
-      [this.#autoplayToggle, 'autoplayToggle'], [this.#resetBalance, 'resetBalance'], [this.#audio, 'audioToggle']];
+      [this.#autoplayToggle, 'autoplayToggle'], [this.#resetBalance, 'resetBalance'], [this.#audio, 'audioToggle'],
+      [this.#historyButton, 'history'], [this.#settingsButton, 'settings']];
     events.forEach(([button, event]) => button.on('press', () => this.emit(event)));
     this.#rulesButton.on('press', () => {
       if (!this.#purchaseDialog.visible && !this.#feature.visible) this.#rulesPanel.toggle();
@@ -121,12 +131,18 @@ export class Hud extends Container {
       [this.#betMinus, 22, 36], [this.#betPlus, 22, 36]]
       .forEach(([button, desktop, mobile]) => button.setFontSize(this.#portrait ? mobile : desktop));
     [[this.#bonus, 220, 44, 304, 84], [this.#turbo, 220, 32, 164, 84],
-      [this.#audio, 132, 32, 184, 84], [this.#rulesButton, 32, 32, 84, 84],
+      [this.#audio, 88, 32, 184, 84], [this.#rulesButton, 32, 32, 84, 84],
+      [this.#historyButton, 36, 32, 164, 84], [this.#settingsButton, 36, 32, 164, 84],
       [this.#autoplayCount, 82, 36, 112, 84], [this.#autoplayToggle, 126, 36, 200, 84],
       [this.#betMinus, 34, 34, 84, 84], [this.#betPlus, 34, 34, 84, 84],
       [this.#spin, 112, 112, 152, 152], [this.#resetBalance, 150, 34, 220, 84]]
       .forEach(([button, dw, dh, mw, mh]) => button.setSize(this.#portrait ? mw : dw, this.#portrait ? mh : dh));
     this.#rulesButton.setFontSize(this.#portrait ? 32 : 20);
+    this.#historyButton.setLabel(this.#portrait ? 'GEÇMİŞ' : '≡');
+    this.#settingsButton.setLabel(this.#portrait ? 'AYARLAR' : '⚙');
+    this.#historyButton.setFontSize(this.#portrait ? 22 : 22);
+    this.#settingsButton.setFontSize(this.#portrait ? 21 : 21);
+    this.#audio.visible = !this.#portrait;
     [this.#balance, this.#bet, this.#win].forEach((readout) => readout.setCaptionSize(this.#portrait ? 18 : 12));
     this.#balance.setValueSize(this.#portrait ? 32 : 26);
     this.#bet.setValueSize(this.#portrait ? 32 : 24);
@@ -134,13 +150,17 @@ export class Hud extends Container {
     this.#stepLabel.position.set(this.#portrait ? 360 : 620, this.#portrait ? 681 : 600);
     this.#stepLabel.style ??= {};
     this.#stepLabel.style.fontSize = this.#portrait ? 25 : 18;
+    this.#breakdownLabel.position.set(this.#portrait ? 360 : 620, this.#portrait ? 681 : 600);
+    this.#breakdownLabel.style ??= {};
+    this.#breakdownLabel.style.fontSize = this.#portrait ? 23 : 17;
     this.#autoplayStatus.style ??= {};
     this.#autoplayStatus.style.fontSize = this.#portrait ? 20 : 12;
     const fields = { title: this.#title, free: this.#free, mult: this.#mult, hint: this.#hint,
       banner: this.#banner, win: this.#win, balance: this.#balance, bet: this.#bet,
       betMinus: this.#betMinus, betPlus: this.#betPlus, spin: this.#spin, turbo: this.#turbo,
       bonus: this.#bonus, autoplayCount: this.#autoplayCount, autoplayToggle: this.#autoplayToggle,
-      autoplayStatus: this.#autoplayStatus, resetBalance: this.#resetBalance, audio: this.#audio, rules: this.#rulesButton };
+      autoplayStatus: this.#autoplayStatus, resetBalance: this.#resetBalance, audio: this.#audio,
+      history: this.#historyButton, settings: this.#settingsButton, rules: this.#rulesButton };
     Object.entries(fields).forEach(([key, view]) => view.position.set(...p[key]));
     this.#subtitle.position.set(p.title[0], orientation === 'portrait' ? 102 : 87);
     this.#rulesPanel.layout(orientation);
@@ -169,6 +189,7 @@ export class Hud extends Container {
     this.#purchaseTitle.style ??= {}; this.#purchaseCost.style ??= {};
     this.#purchaseTitle.style.fontSize = portrait ? 32 : 28;
     this.#purchaseCost.style.fontSize = portrait ? 32 : 24;
+    this.#syncBonusControls();
   }
 
   #drawSurfaces(orientation, p) {
@@ -187,7 +208,7 @@ export class Hud extends Container {
       surface(this.#statsPanel, 56, 706, 608, 152, 16);
       this.#statsPanel.rect(360, 731, 1, 43).fill({ color: UI.edge, alpha: 0.16 })
         .rect(80, 788, 560, 1).fill({ color: UI.edge, alpha: 0.12 });
-      surface(this.#controlPanel, 56, 864, 608, 278, 18);
+      surface(this.#controlPanel, 56, 864, 608, this.#chef.active ? 108 : 278, 18);
     } else {
       // The chef and the bonus pot occupy the reserved left area.
       surface(this.#statsPanel, 316, 622, 608, 66, 14);
@@ -209,6 +230,8 @@ export class Hud extends Container {
     this.#stepLabel.alpha = 0;
     this.#spinMode = 'base';
     this.#chef.resetRound();
+    this.clearSpinBreakdown();
+    this.#syncBonusControls();
     this.#mult.visible = true;
     this.setMultiplier(0);
   }
@@ -218,11 +241,24 @@ export class Hud extends Container {
     this.#spinMode = mode;
     this.#mult.visible = mode !== 'free';
     if (mode === 'free') { this.#mult.text = ''; this.#hint.visible = false; }
+    this.#syncBonusControls();
   }
 
-  finishRound() { if (this.#spinMode === 'free') this.#chef.finishBonus(); }
+  finishRound() {
+    if (this.#spinMode === 'free') this.#chef.finishBonus();
+    this.#syncBonusControls();
+  }
 
   get hasModal() { return this.#rulesPanel.visible || this.#purchaseDialog.visible || this.#feature.visible; }
+  get rulesOpen() { return this.#rulesPanel.visible; }
+  get purchaseOpen() { return this.#purchaseDialog.visible; }
+  get featureOpen() { return this.#feature.visible; }
+  get accessibilityRoot() {
+    if (this.#rulesPanel.visible) return this.#rulesPanel;
+    if (this.#purchaseDialog.visible) return this.#purchaseDialog;
+    if (this.#feature.visible) return this.#feature;
+    return this;
+  }
 
   dismissModal() {
     if (this.#rulesPanel.visible) { this.#rulesPanel.hide(); return true; }
@@ -266,6 +302,21 @@ export class Hud extends Container {
     this.#animator.wait(1500).then(() => {
       if (token === this.#stepToken) return this.#animator.tween(this.#stepLabel, { alpha: 0 }, 200);
     });
+  }
+
+  clearSpinBreakdown() {
+    this.#stepToken++;
+    this.#stepLabel.alpha = 0;
+    this.#breakdownLabel.visible = false;
+    this.#breakdownLabel.text = '';
+  }
+
+  showSpinBreakdown({ raw, multiplier, payout, capped = false }) {
+    this.#stepToken++;
+    this.#stepLabel.alpha = 0;
+    const factor = Number(multiplier).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+    this.#breakdownLabel.text = `${fmt(raw)} × ${factor} = ${fmt(payout)}${capped ? ' · TAVAN' : ''}`;
+    this.#breakdownLabel.visible = true;
   }
 
   // ---------- Değer göstergeleri ----------
@@ -385,13 +436,25 @@ export class Hud extends Container {
     this.#turbo.setLabel(on ? 'TURBO AÇIK' : 'TURBO');
   }
 
-  setControls({ canSpin, canChangeBet, canBuyBonus = false, canAutoplay = false, autoplayRunning = false }) {
-    this.#spin.setEnabled(canSpin);
+  setControls({ canSpin, canFinishSpin = false, canChangeBet, canBuyBonus = false, canAutoplay = false, autoplayRunning = false }) {
+    this.#spin.setEnabled(canSpin || canFinishSpin);
+    this.#spin.setLabel(canFinishSpin ? 'BİTİR' : 'SPIN');
+    this.#spin.setAccessibleLabel(canFinishSpin ? 'Bu dönüşün animasyonunu bitir' : 'Döndür');
     this.#betMinus.setEnabled(canChangeBet);
     this.#betPlus.setEnabled(canChangeBet);
     this.#bonus.setEnabled(canBuyBonus);
     this.#autoplayCount.setEnabled(canAutoplay);
     this.#autoplayToggle.setEnabled(canAutoplay || autoplayRunning);
     this.#rulesButton.setEnabled(canChangeBet);
+    this.#syncBonusControls();
+  }
+
+  #syncBonusControls() {
+    const bonus = this.#portrait && this.#chef.active;
+    this.#bonus.visible = !bonus;
+    this.#autoplayCount.visible = !bonus;
+    this.#autoplayToggle.visible = !bonus;
+    this.#autoplayStatus.visible = !bonus;
+    this.#drawSurfaces(this.#portrait ? 'portrait' : 'landscape', POSITIONS[this.#portrait ? 'portrait' : 'landscape']);
   }
 }

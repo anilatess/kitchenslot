@@ -6,7 +6,7 @@ import { createRng } from '../src/game/rng.js';
 import { RULES } from '../src/game/config.js';
 
 function setup() {
-  const log = { wins: [], grids: [], progress: [], intros: [], summaries: [], celebrations: [], free: [], mult: [], modes: [] };
+  const log = { wins: [], grids: [], progress: [], intros: [], summaries: [], celebrations: [], free: [], mult: [], modes: [], breakdowns: [] };
   const hud = {
     beginRound() {}, finishRound() {},
     setSpinMode: (mode) => log.modes.push(mode),
@@ -19,6 +19,7 @@ function setup() {
     showBonusSummary: async (value) => log.summaries.push(value),
     showWinCelebration: async (value) => log.celebrations.push(value),
     showBanner: async () => {},
+    showSpinBreakdown: (value) => log.breakdowns.push(value),
   };
   const grid = {
     dropIn: async (value) => log.grids.push(value), pulseWhere: async () => {},
@@ -48,6 +49,9 @@ test('gerçek tavan turunda tüm ara sayaçlar resmi ödeme sınırında ve mono
   assert.deepEqual(log.summaries, [{ win: payout, multiplier: round.freeMult, spins: round.freeCount, bet }]);
   assert.equal(log.celebrations[0].capped, true);
   assert.equal(log.celebrations[0].win, payout);
+  assert.ok(Math.abs(log.breakdowns.reduce((sum, item) => sum + item.payout, 0) - payout) < 1e-8);
+  assert.equal(log.breakdowns.at(-1).capped, true, 'son dönüşün hesabı tavan kısıtlamasını açıklamalı');
+  assert.ok(log.breakdowns.at(-1).payout < log.breakdowns.at(-1).raw * log.breakdowns.at(-1).multiplier);
   assert.equal(JSON.stringify(round), before, 'sunum motor kaydını değiştirmemeli');
 });
 
@@ -78,6 +82,36 @@ test('yenilemeden devam: biten dönüşler atlanır, çarpan ve sayaçlar doğru
   assert.equal(payout, round.total * bet);
   assert.equal(resumed.log.summaries[0].multiplier, round.freeMult);
   assert.equal(resumed.log.summaries[0].spins, round.freeCount);
+  assert.equal(resumed.log.breakdowns.length, round.spins.length - split);
+});
+
+test('kazanç açıklaması gerçek eşleşmelerin parasal tutarı × çarpan = dönüşün resmi ödemesidir', async () => {
+  const { player, log } = setup();
+  const spin = {
+    mode: 'base', initialGrid: [], scatters: 0, raw: 0.2, multSum: 12, appliedMult: 12, win: 2.4,
+    steps: [
+      { stepWin: 0.15, removed: [[true]], collected: [], wins: [{ symbol: 1, length: 3, ways: 3, pay: 0.15 }] },
+      { stepWin: 0.05, removed: [[true]], collected: [], wins: [{ symbol: 2, length: 4, ways: 1, pay: 0.05 }] },
+    ], endCollected: [],
+  };
+  assert.equal(await player.play({ total: 2.4, spins: [spin] }, 2), 4.8);
+  assert.deepEqual(log.breakdowns, [{
+    raw: 0.4, multiplier: 12, payout: 4.8, capped: false, mode: 'base',
+    wins: [{ symbol: 1, length: 3, ways: 3, pay: 0.3 }, { symbol: 2, length: 4, ways: 1, pay: 0.1 }],
+  }]);
+});
+
+test('tavan açıklaması tur toplamını değil sadece o dönüşe kalan resmi ödemeyi gösterir', async () => {
+  const { player, log } = setup();
+  const spin = (mode, multiplier) => ({
+    mode, initialGrid: [], scatters: 0, raw: 1, multSum: multiplier, appliedMult: multiplier, win: multiplier,
+    freeMult: multiplier, steps: [{ stepWin: 1, removed: [[true]], collected: [], wins: [] }], endCollected: [],
+  });
+  assert.equal(await player.play({ total: 5, capped: true, spins: [spin('base', 2), spin('free', 4)] }, 2), 10);
+  assert.deepEqual(log.breakdowns.map(({ raw, multiplier, payout, capped }) => ({ raw, multiplier, payout, capped })), [
+    { raw: 2, multiplier: 2, payout: 4, capped: false },
+    { raw: 2, multiplier: 4, payout: 6, capped: true },
+  ]);
 });
 
 test('tüm dönüşler bitmişse yalnızca resmi sonuç sunulur ve yeni dönüş oynatılmaz', async () => {

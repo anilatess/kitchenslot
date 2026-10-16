@@ -138,3 +138,113 @@ test('HUD bonus çarpanını şefe yönlendirir ve yeni turda temizler', async (
   hud.beginRound();
   assert.equal(chef.total, 0);
 });
+
+test('BİTİR mevcut dönüşü tamamlamaya açılırken yeni bahis kontrolleri kilitli kalır', () => {
+  const hud = new Hud({});
+  let spins = 0;
+  hud.on('spin', () => { spins++; });
+  hud.setControls({ canSpin: false, canFinishSpin: true, canChangeBet: false });
+  const finish = buttonWith(hud, 'BİTİR');
+  assert.equal(finish.enabled, true);
+  assert.equal(finish.accessibleLabel, 'Bu dönüşün animasyonunu bitir');
+  assert.equal(buttonWith(hud, '+').enabled, false);
+  finish.press();
+  assert.equal(spins, 1);
+  hud.setControls({ canSpin: false, canFinishSpin: false, canChangeBet: false });
+  assert.equal(finish.enabled, false);
+  assert.ok(finish.children.some(child => child.text === 'SPIN'));
+  finish.press();
+  assert.equal(spins, 1);
+});
+
+test('geçmiş ve ayarlar düğmeleri mobilde dokunulabilir; dönüş sırasında mola için erişilebilir', () => {
+  const hud = new Hud({});
+  const history = buttonWith(hud, 'GEÇMİŞ');
+  const settings = buttonWith(hud, 'AYARLAR');
+  const events = [];
+  hud.on('history', () => events.push('history'));
+  hud.on('settings', () => events.push('settings'));
+  hud.layout('portrait');
+  hud.setControls({ canSpin: false, canChangeBet: false });
+  assert.equal(history.enabled, true);
+  assert.equal(settings.enabled, true);
+  assert.equal(history.x, 166); assert.equal(settings.x, 350);
+  assert.equal(history.hitArea.height, 84); assert.equal(settings.hitArea.width, 164);
+  assert.equal(buttonWith(hud, 'SES AÇIK').visible, false, 'mobilde ses ayarlar menüsündedir');
+  history.press(); settings.press();
+  assert.deepEqual(events, ['history', 'settings']);
+  hud.layout('landscape');
+  assert.equal(history.hitArea.width, 36);
+  assert.equal(settings.hitArea.width, 36);
+  assert.equal(history.accessibleLabel, 'Tur geçmişi');
+  assert.equal(settings.accessibleLabel, 'Ses ve oyun ayarları');
+  assert.equal(buttonWith(hud, 'SES AÇIK').visible, true);
+});
+
+test('kazanç formülü para tutarlarını ve tavan açıklamasını korur; yeni dönüşte temizlenir', () => {
+  const hud = new Hud({});
+  hud.showSpinBreakdown({ raw: 0.4, multiplier: 12, payout: 4.8 });
+  const formula = hud.children.find(item => item.label === 'spin-breakdown');
+  assert.equal(formula.text, '0,40 × 12 = 4,80');
+  assert.equal(formula.visible, true);
+  hud.layout('portrait');
+  assert.equal(formula.y, 681);
+  assert.equal(formula.text, '0,40 × 12 = 4,80');
+  hud.showSpinBreakdown({ raw: 2, multiplier: 4, payout: 6, capped: true });
+  assert.equal(formula.text, '2,00 × 4 = 6,00 · TAVAN');
+  hud.clearSpinBreakdown();
+  assert.equal(formula.visible, false);
+  assert.equal(formula.text, '');
+});
+
+test('mobil bonusta şef büyür, kullanılmayan kontroller gizlenir; sonuçta tekrar açılır', async () => {
+  const { ChefBonusView } = await import('../src/view/ChefBonusView.js');
+  const hud = new Hud({});
+  const chef = hud.children.find(item => item instanceof ChefBonusView);
+  hud.layout('portrait');
+  const controls = ['BONUS AL (100x)', 'OTO ×10', 'OTO BAŞLAT'].map(value => buttonWith(hud, value));
+  assert.ok(controls.every(button => button.visible));
+  hud.setSpinMode('free'); hud.setMultiplier(25);
+  assert.deepEqual(chef.collectionTarget, { x: 220, y: 1170 });
+  assert.ok(controls.every(button => !button.visible));
+  assert.equal(buttonWith(hud, 'GEÇMİŞ').visible, true);
+  assert.equal(buttonWith(hud, 'AYARLAR').visible, true);
+  hud.layout('landscape');
+  assert.deepEqual(chef.collectionTarget, { x: 160, y: 400 });
+  assert.ok(controls.every(button => button.visible));
+  hud.layout('portrait');
+  assert.deepEqual(chef.collectionTarget, { x: 220, y: 1170 });
+  hud.finishRound(); hud.finishRound();
+  assert.equal(chef.total, 25);
+  assert.deepEqual(chef.collectionTarget, { x: 146, y: 1236 });
+  assert.ok(controls.every(button => button.visible), 'yeni bonus hemen satın alınabilmeli');
+  hud.beginRound();
+  assert.equal(chef.total, 0);
+  assert.ok(controls.every(button => button.visible));
+});
+
+test('erişilebilir klavye odağı yalnızca açık ödeme, satın alma veya sonuç penceresine gider', async () => {
+  const animator = { tween: async (target, to, duration, ease, update) => {
+    Object.assign(target, to); update?.();
+  }, wait: () => new Promise(() => {}) };
+  const hud = new Hud(animator);
+  assert.equal(hud.accessibilityRoot, hud);
+  buttonWith(hud, '?').press();
+  assert.equal(hud.rulesOpen, true);
+  assert.equal(hud.accessibilityRoot, hud.children.at(-1));
+  assert.equal(hud.accessibilityRoot.accessibilityModal, true);
+  hud.dismissModal();
+  const purchase = hud.confirmBonusPurchase(100);
+  assert.equal(hud.purchaseOpen, true);
+  assert.notEqual(hud.accessibilityRoot, hud);
+  assert.equal(hud.accessibilityRoot.accessibilityModal, true);
+  assert.ok(hud.accessibilityRoot.children.some(child => child.text === 'BONUS SATIN AL'));
+  hud.dismissModal(); await purchase;
+  const summary = hud.showBonusSummary({ win: 12, multiplier: 5, spins: 10 });
+  assert.equal(hud.featureOpen, true);
+  assert.notEqual(hud.accessibilityRoot, hud);
+  assert.equal(hud.accessibilityRoot.accessibilityModal, true);
+  await new Promise(resolve => setImmediate(resolve));
+  hud.dismissModal(); await summary;
+  assert.equal(hud.accessibilityRoot, hud);
+});
