@@ -1,0 +1,147 @@
+import { Container, Graphics, Text } from 'pixi.js';
+import { COLORS, TIMING } from '../core/constants.js';
+import { easeOutBack, easeOutQuad } from '../animation/easing.js';
+import { Button } from './Button.js';
+import { Readout } from './Readout.js';
+
+const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Konumlar tasarım koordinatlarındadır (bkz. constants.DESIGN).
+const POSITIONS = {
+  landscape: {
+    title: [640, 40], free: [640, 82], mult: [190, 329], banner: [640, 329],
+    win: [640, 606], balance: [150, 668], bet: [640, 672],
+    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440],
+  },
+  portrait: {
+    title: [360, 60], free: [360, 130], mult: [360, 205], banner: [360, 474],
+    win: [360, 775], balance: [360, 1180], bet: [360, 885],
+    betMinus: [200, 885], betPlus: [520, 885], spin: [360, 1040], turbo: [610, 1040],
+  },
+};
+
+const text = (value, size, fill) =>
+  new Text({ text: value, style: { fontFamily: 'system-ui, sans-serif', fontSize: size, fontWeight: '800', fill } });
+
+// Ekrandaki tüm arayüz: yazılar, düğmeler, banner. Durumu kendisi tutmaz;
+// Game'den gelen değerleri gösterir, kullanıcı eylemlerini olay olarak yayar:
+// 'spin', 'betUp', 'betDown', 'turbo'
+export class Hud extends Container {
+  #animator;
+  #winShown = 0;
+
+  #title = text('MUTFAK SLOT', 34, COLORS.gold);
+  #free = text('', 26, 0x7dffd0);
+  #mult = text('', 34, 0xff8a5c);
+  #banner = text('', 56, COLORS.gold);
+  #bannerShade = new Graphics();
+
+  #balance = new Readout('BAKİYE');
+  #bet = new Readout('BAHİS', { valueSize: 30 });
+  #win = new Readout('KAZANÇ', { valueSize: 44, valueColor: COLORS.gold });
+
+  #betMinus = new Button({ label: '−', width: 64, height: 64, fontSize: 36 });
+  #betPlus = new Button({ label: '+', width: 64, height: 64, fontSize: 36 });
+  #spin = new Button({ label: 'SPIN', width: 150, height: 150, fill: COLORS.spin, fontSize: 32 });
+  #turbo = new Button({ label: 'TURBO', width: 130, height: 52, fontSize: 20 });
+
+  constructor(animator) {
+    super();
+    this.#animator = animator;
+
+    [this.#title, this.#free, this.#mult, this.#banner].forEach((t) => t.anchor.set(0.5));
+    this.#banner.alpha = 0;
+    this.#bannerShade.alpha = 0;
+    this.addChild(
+      this.#title, this.#free, this.#mult, this.#balance, this.#bet, this.#win,
+      this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bannerShade, this.#banner,
+    );
+
+    this.#spin.on('press', () => this.emit('spin'));
+    this.#betMinus.on('press', () => this.emit('betDown'));
+    this.#betPlus.on('press', () => this.emit('betUp'));
+    this.#turbo.on('press', () => this.emit('turbo'));
+    this.setWin(0);
+  }
+
+  layout(orientation) {
+    const p = POSITIONS[orientation];
+    const place = (view, key) => view.position.set(...p[key]);
+    place(this.#title, 'title');
+    place(this.#free, 'free');
+    place(this.#mult, 'mult');
+    place(this.#banner, 'banner');
+    place(this.#win, 'win');
+    place(this.#balance, 'balance');
+    place(this.#bet, 'bet');
+    place(this.#betMinus, 'betMinus');
+    place(this.#betPlus, 'betPlus');
+    place(this.#spin, 'spin');
+    place(this.#turbo, 'turbo');
+    this.#bannerShade.position.set(...p.banner);
+    this.#bannerShade.clear().rect(-380, -70, 760, 140).fill({ color: 0x000000 });
+  }
+
+  // ---------- Değer göstergeleri ----------
+
+  setBalance(value) {
+    this.#balance.text = fmt(value);
+  }
+
+  setBet(value) {
+    this.#bet.text = fmt(value);
+  }
+
+  setWin(value) {
+    this.#winShown = value;
+    this.#win.text = fmt(value);
+  }
+
+  /** Kazanç sayacını mevcut değerden hedefe doğru sayarak götürür. */
+  async countWinTo(target, duration = TIMING.countUp) {
+    if (Math.abs(target - this.#winShown) < 0.005) return;
+    const counter = { value: this.#winShown };
+    await this.#animator.tween(counter, { value: target }, duration, easeOutQuad, () => this.setWin(counter.value));
+    this.setWin(target);
+  }
+
+  /** 0 verilirse gizler. */
+  setMultiplier(value) {
+    this.#mult.text = value > 0 ? `ÇARPAN x${value}` : '';
+    if (value > 0) {
+      this.#mult.scale.set(1.35);
+      this.#animator.tween(this.#mult, { scale: 1 }, 260, (t) => easeOutBack(t, 1.5));
+    }
+  }
+
+  /** { current, total } ya da null (gizle). */
+  setFreeSpins(info) {
+    this.#free.text = info ? `BEDAVA DÖNÜŞ  ${info.current} / ${info.total}` : '';
+  }
+
+  async showBanner(message, hold = TIMING.banner) {
+    this.#banner.text = message;
+    this.#banner.scale.set(0.6);
+    await Promise.all([
+      this.#animator.tween(this.#bannerShade, { alpha: 0.65 }, 200),
+      this.#animator.tween(this.#banner, { alpha: 1, scale: 1 }, 320, (t) => easeOutBack(t, 1.6)),
+    ]);
+    await this.#animator.wait(hold);
+    await Promise.all([
+      this.#animator.tween(this.#bannerShade, { alpha: 0 }, 220),
+      this.#animator.tween(this.#banner, { alpha: 0 }, 220),
+    ]);
+  }
+
+  // ---------- Kontrol durumları ----------
+
+  setTurbo(on) {
+    this.#turbo.setFill(on ? 0x2e9d6b : COLORS.button);
+  }
+
+  setControls({ canSpin, canChangeBet }) {
+    this.#spin.setEnabled(canSpin);
+    this.#betMinus.setEnabled(canChangeBet);
+    this.#betPlus.setEnabled(canChangeBet);
+  }
+}

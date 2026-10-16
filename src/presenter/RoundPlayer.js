@@ -1,0 +1,77 @@
+import { RULES, SYM } from '../game/config.js';
+import { TIMING } from '../core/constants.js';
+
+// Motorun ürettiği turu (playRound çıktısı, record: true) sahnede sırayla oynatır.
+// Oyun kuralı bilmez; sadece "hangi animasyon, hangi sırayla" sorusunu yanıtlar.
+export class RoundPlayer {
+  #grid;
+  #hud;
+  #animator;
+
+  constructor({ grid, hud, animator }) {
+    this.#grid = grid;
+    this.#hud = hud;
+    this.#animator = animator;
+  }
+
+  /** Turu oynatır ve oyuncuya ödenecek tutarı (para birimi) döndürür. */
+  async play(round, bet) {
+    let roundWin = 0;       // tur boyunca biriken kazanç (bahis katı)
+    let freeIndex = 0;
+    let freeLeft = 0;
+
+    for (const spin of round.spins) {
+      if (spin.mode === 'free') {
+        if (freeIndex === 0) {
+          freeLeft = RULES.freeSpins;
+          await this.#hud.showBanner(`${freeLeft} BEDAVA DÖNÜŞ`);
+        }
+        freeIndex++;
+        freeLeft--;
+        this.#hud.setFreeSpins({ current: freeIndex, total: freeIndex + freeLeft });
+      }
+
+      roundWin = await this.#playSpin(spin, bet, roundWin);
+
+      if (spin.mode === 'free') {
+        if (spin.scatters >= RULES.scatterTrigger) {
+          freeLeft += RULES.retriggerSpins;
+          await this.#hud.showBanner(`+${RULES.retriggerSpins} BEDAVA DÖNÜŞ`);
+        }
+        await this.#animator.wait(TIMING.spinGap);
+      }
+    }
+
+    // Motor kazancı tavanla sınırlamış olabilir: gösterilen son değer resmi toplamdır.
+    if (round.capped) await this.#hud.showBanner('MAKSİMUM KAZANÇ!');
+    await this.#hud.countWinTo(round.total * bet);
+    this.#hud.setFreeSpins(null);
+    return round.total * bet;
+  }
+
+  async #playSpin(spin, bet, winBefore) {
+    await this.#grid.dropIn(spin.initialGrid);
+    if (spin.scatters >= RULES.scatterTrigger) await this.#grid.pulseWhere((cell) => cell === SYM.SCT);
+
+    // Bedava dönüşte çarpan birikimlidir: önceki dönüşlerden gelen değerle başla.
+    let multiplier = spin.mode === 'free' ? spin.freeMult - spin.multSum : 0;
+    this.#hud.setMultiplier(multiplier);
+    const collect = (value) => {
+      multiplier += value;
+      this.#hud.setMultiplier(multiplier);
+    };
+
+    let raw = 0;
+    for (const step of spin.steps) {
+      await this.#grid.playStep(step, collect);
+      raw += step.stepWin;
+      await this.#hud.countWinTo((winBefore + raw) * bet, TIMING.countUp * 0.6);
+    }
+    await this.#grid.collectCells(spin.endCollected, collect);
+
+    // Çarpan, zincirin toplam kazancına en sonda uygulanır.
+    if (spin.raw > 0 && spin.appliedMult > 1) await this.#hud.countWinTo((winBefore + spin.win) * bet);
+    await this.#animator.wait(TIMING.stepGap);
+    return winBefore + spin.win;
+  }
+}
