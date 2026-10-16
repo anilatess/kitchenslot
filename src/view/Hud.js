@@ -4,99 +4,107 @@ import { easeOutBack, easeOutQuad } from '../animation/easing.js';
 import { Button } from './Button.js';
 import { Readout } from './Readout.js';
 import { RulesPanel } from './RulesPanel.js';
+import { ChefBonusView } from './ChefBonusView.js';
+import { FeatureOverlay } from './FeatureOverlay.js';
 
+const UI = { surface: 0x101b17, edge: 0xbda675, text: 0xf4f0e5, muted: 0x9aaa9e, gold: 0xdfc58a };
 const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-// Konumlar tasarım koordinatlarındadır (bkz. constants.DESIGN).
 const POSITIONS = {
   landscape: {
-    title: [640, 40], free: [640, 82], mult: [190, 329], banner: [640, 329],
-    win: [640, 606], balance: [150, 668], bet: [640, 672],
-    betMinus: [510, 672], betPlus: [770, 672], spin: [1130, 560], turbo: [1130, 440], bonus: [1130, 330], resetBalance: [150, 575],
-    autoplayCount: [1040, 250], autoplayToggle: [1190, 250], autoplayStatus: [1115, 200], audio: [1130, 145], rules: [1220, 60],
+    title: [620, 46], free: [620, 92], mult: [1095, 523], banner: [620, 352],
+    win: [833, 656], balance: [405, 656], bet: [620, 656],
+    betMinus: [535, 656], betPlus: [705, 656], spin: [1095, 438],
+    turbo: [1095, 347], bonus: [1095, 244], resetBalance: [405, 656],
+    autoplayCount: [1024, 299], autoplayToggle: [1142, 299], autoplayStatus: [1095, 372],
+    audio: [1050, 192], rules: [1196, 192], hint: [1095, 523],
   },
   portrait: {
-    title: [360, 60], free: [360, 130], mult: [360, 205], banner: [360, 474],
-    win: [360, 775], balance: [160, 1230], bet: [360, 850],
-    betMinus: [200, 850], betPlus: [520, 850], spin: [360, 1120], turbo: [610, 1120], bonus: [360, 1020],
-    autoplayCount: [200, 950], autoplayToggle: [520, 950], autoplayStatus: [360, 900], resetBalance: [360, 1240], audio: [610, 130], rules: [660, 60],
+    title: [360, 60], free: [360, 137], mult: [522, 1101], banner: [360, 430],
+    win: [515, 754], balance: [205, 754], bet: [360, 817],
+    betMinus: [228, 817], betPlus: [492, 817], spin: [548, 1046],
+    turbo: [548, 914], bonus: [236, 1002], resetBalance: [205, 754],
+    autoplayCount: [140, 1092], autoplayToggle: [308, 1092], autoplayStatus: [360, 1154],
+    audio: [176, 914], rules: [350, 914], hint: [548, 1146],
   },
 };
+const text = (value, size, fill, extra = {}) => new Text({ text: value, style: {
+  fontFamily: 'system-ui, sans-serif', fontSize: size, fontWeight: '600', fill, ...extra,
+} });
 
-const text = (value, size, fill) =>
-  new Text({ text: value, style: { fontFamily: 'system-ui, sans-serif', fontSize: size, fontWeight: '800', fill } });
-
-// Ekrandaki tüm arayüz: yazılar, düğmeler, banner. Durumu kendisi tutmaz;
-// Game'den gelen değerleri gösterir, kullanıcı eylemlerini olay olarak yayar:
-// 'spin', 'betUp', 'betDown', 'turbo'
 export class Hud extends Container {
   #animator;
   #winShown = 0;
-
-  #title = text('MUTFAK SLOT', 34, COLORS.gold);
-  #free = text('', 26, 0x7dffd0);
-  #mult = text('', 34, 0xff8a5c);
-  #banner = text('', 56, COLORS.gold);
+  #spinMode = 'base';
+  #chef = new ChefBonusView();
+  #portrait = false;
+  #feature;
+  #stepLabel = text('', 18, UI.gold);
+  #stepToken = 0;
+  #title = text('MUTFAK SLOT', 38, UI.text, { fontFamily: 'Georgia, serif', fontWeight: '700', letterSpacing: 3 });
+  #subtitle = text('TAZE SEMBOLLER · SICAK KAZANÇLAR', 12, UI.gold, { letterSpacing: 2 });
+  #free = text('', 21, UI.gold);
+  #mult = text('', 18, UI.gold);
+  #hint = text('BOŞLUK İLE DÖNDÜR', 10, UI.muted, { letterSpacing: 1.3 });
+  #banner = text('', 50, UI.gold);
   #bannerShade = new Graphics();
+  #titleSign = new Graphics();
+  #controlPanel = new Graphics();
+  #statsPanel = new Graphics();
 
-  #balance = new Readout('BAKİYE');
-  #bet = new Readout('BAHİS', { valueSize: 30 });
-  #win = new Readout('KAZANÇ', { valueSize: 44, valueColor: COLORS.gold });
-
-  #betMinus = new Button({ label: '−', width: 64, height: 64, fontSize: 36 });
-  #betPlus = new Button({ label: '+', width: 64, height: 64, fontSize: 36 });
-  #spin = new Button({ label: 'SPIN', width: 150, height: 150, fill: COLORS.spin, fontSize: 32 });
-  #turbo = new Button({ label: 'TURBO', width: 130, height: 52, fontSize: 20 });
-  #bonus = new Button({ label: 'BONUS AL (100x)', width: 210, height: 52, fontSize: 16 });
-  #autoplayCount = new Button({ label: 'OTO ×10', width: 140, height: 52, fontSize: 18 });
-  #autoplayToggle = new Button({ label: 'OTO BAŞLAT', width: 160, height: 52, fontSize: 17 });
-  #autoplayStatus = text('', 18, COLORS.textDim);
-  #resetBalance = new Button({ label: 'BAKİYEYİ SIFIRLA', width: 220, height: 48, fontSize: 15 });
-  #audio = new Button({ label: 'SES AÇIK', width: 130, height: 48, fontSize: 16 });
-  #rulesButton = new Button({ label: '?', width: 56, height: 56, fontSize: 32 });
+  #balance = new Readout('BAKİYE', { valueSize: 26, width: 145 });
+  #bet = new Readout('TOPLAM BAHİS', { valueSize: 24, width: 100 });
+  #win = new Readout('KAZANÇ', { valueSize: 28, valueColor: UI.gold, width: 140 });
+  #betMinus = new Button({ label: '−', width: 34, height: 34, radius: 9, fontSize: 24 });
+  #betPlus = new Button({ label: '+', width: 34, height: 34, radius: 9, fontSize: 24 });
+  #spin = new Button({ label: 'SPIN', width: 112, height: 112, variant: 'spin', fontSize: 13, color: 0x17231e });
+  #turbo = new Button({ label: 'TURBO', width: 220, height: 32, fontSize: 14 });
+  #bonus = new Button({ label: 'BONUS AL (100x)', width: 220, height: 44, fill: 0xc9b17b, color: 0x17231e, fontSize: 17 });
+  #autoplayCount = new Button({ label: 'OTO ×10', width: 82, height: 36, fontSize: 15 });
+  #autoplayToggle = new Button({ label: 'OTO BAŞLAT', width: 126, height: 36, fontSize: 14 });
+  #autoplayStatus = text('', 12, UI.muted);
+  #resetBalance = new Button({ label: 'BAKİYEYİ SIFIRLA', width: 150, height: 34, fontSize: 10 });
+  #audio = new Button({ label: 'SES AÇIK', width: 132, height: 32, fontSize: 12 });
+  #rulesButton = new Button({ label: '?', width: 32, height: 32, fontSize: 20 });
   #rulesPanel = new RulesPanel();
 
   #purchaseDialog = new Container();
   #purchaseShade = new Graphics();
   #purchasePanel = new Graphics();
-  #purchaseTitle = text('BONUS SATIN AL', 30, COLORS.gold);
-  #purchaseCost = text('', 24, COLORS.text);
-  #purchaseYes = new Button({ label: 'EVET', width: 170, height: 60, fill: COLORS.spin, fontSize: 22 });
-  #purchaseCancel = new Button({ label: 'VAZGEÇ', width: 170, height: 60, fontSize: 20 });
+  #purchaseTitle = text('BONUS SATIN AL', 28, UI.gold);
+  #purchaseCost = text('', 24, UI.text);
+  #purchaseYes = new Button({ label: 'EVET', width: 170, height: 54, fill: 0xc9b17b, color: 0x17231e, fontSize: 18 });
+  #purchaseCancel = new Button({ label: 'VAZGEÇ', width: 170, height: 54, fontSize: 18 });
   #resolvePurchase = null;
 
   constructor(animator) {
     super();
     this.#animator = animator;
-
-    [this.#title, this.#free, this.#mult, this.#banner, this.#autoplayStatus].forEach((t) => t.anchor.set(0.5));
+    this.#feature = new FeatureOverlay(animator);
+    [this.#title, this.#subtitle, this.#free, this.#mult, this.#hint, this.#banner, this.#autoplayStatus]
+      .forEach((item) => item.anchor.set(0.5));
     this.#banner.alpha = 0;
     this.#bannerShade.alpha = 0;
+    this.#stepLabel.anchor.set(0.5);
+    this.#stepLabel.alpha = 0;
     this.#purchaseDialog.visible = false;
     this.#purchaseDialog.eventMode = 'static';
     this.#purchaseShade.eventMode = 'static';
-    [this.#purchaseTitle, this.#purchaseCost].forEach((t) => t.anchor.set(0.5));
-    this.#purchaseDialog.addChild(
-      this.#purchaseShade, this.#purchasePanel, this.#purchaseTitle, this.#purchaseCost,
-      this.#purchaseYes, this.#purchaseCancel,
-    );
-    this.addChild(
-      this.#title, this.#free, this.#mult, this.#balance, this.#bet, this.#win,
+    [this.#purchaseTitle, this.#purchaseCost].forEach((item) => item.anchor.set(0.5));
+    this.#purchaseDialog.addChild(this.#purchaseShade, this.#purchasePanel, this.#purchaseTitle,
+      this.#purchaseCost, this.#purchaseYes, this.#purchaseCancel);
+    this.addChild(this.#chef, this.#titleSign, this.#controlPanel, this.#statsPanel,
+      this.#title, this.#subtitle, this.#free, this.#mult, this.#hint, this.#balance, this.#bet, this.#win,
       this.#betMinus, this.#betPlus, this.#spin, this.#turbo, this.#bonus,
       this.#autoplayCount, this.#autoplayToggle, this.#autoplayStatus, this.#resetBalance,
-      this.#audio, this.#bannerShade, this.#banner, this.#rulesButton, this.#purchaseDialog, this.#rulesPanel,
-    );
-
-    this.#spin.on('press', () => this.emit('spin'));
-    this.#betMinus.on('press', () => this.emit('betDown'));
-    this.#betPlus.on('press', () => this.emit('betUp'));
-    this.#turbo.on('press', () => this.emit('turbo'));
-    this.#bonus.on('press', () => this.emit('buyBonus'));
-    this.#autoplayCount.on('press', () => this.emit('autoplayCount'));
-    this.#autoplayToggle.on('press', () => this.emit('autoplayToggle'));
-    this.#resetBalance.on('press', () => this.emit('resetBalance'));
-    this.#audio.on('press', () => this.emit('audioToggle'));
-    this.#rulesButton.on('press', () => this.#rulesPanel.toggle());
+      this.#audio, this.#stepLabel, this.#bannerShade, this.#banner, this.#rulesButton,
+      this.#purchaseDialog, this.#feature, this.#rulesPanel);
+    const events = [[this.#spin, 'spin'], [this.#betMinus, 'betDown'], [this.#betPlus, 'betUp'],
+      [this.#turbo, 'turbo'], [this.#bonus, 'buyBonus'], [this.#autoplayCount, 'autoplayCount'],
+      [this.#autoplayToggle, 'autoplayToggle'], [this.#resetBalance, 'resetBalance'], [this.#audio, 'audioToggle']];
+    events.forEach(([button, event]) => button.on('press', () => this.emit(event)));
+    this.#rulesButton.on('press', () => {
+      if (!this.#purchaseDialog.visible && !this.#feature.visible) this.#rulesPanel.toggle();
+    });
     this.#purchaseYes.on('press', () => this.#finishPurchase(true));
     this.#purchaseCancel.on('press', () => this.#finishPurchase(false));
     this.setWin(0);
@@ -104,39 +112,160 @@ export class Hud extends Container {
 
   layout(orientation) {
     const p = POSITIONS[orientation];
-    const place = (view, key) => view.position.set(...p[key]);
-    place(this.#title, 'title');
-    place(this.#free, 'free');
-    place(this.#mult, 'mult');
-    place(this.#banner, 'banner');
-    place(this.#win, 'win');
-    place(this.#balance, 'balance');
-    place(this.#bet, 'bet');
-    place(this.#betMinus, 'betMinus');
-    place(this.#betPlus, 'betPlus');
-    place(this.#spin, 'spin');
-    place(this.#turbo, 'turbo');
-    place(this.#bonus, 'bonus');
-    place(this.#autoplayCount, 'autoplayCount');
-    place(this.#autoplayToggle, 'autoplayToggle');
-    place(this.#autoplayStatus, 'autoplayStatus');
-    place(this.#resetBalance, 'resetBalance');
-    place(this.#audio, 'audio');
-    place(this.#rulesButton, 'rules');
+    this.#portrait = orientation === 'portrait';
+    this.#chef.layout(orientation);
+    this.#feature.layout(orientation);
+    this.#hint.visible = !this.#portrait && !this.#mult.text && this.#spinMode !== 'free';
+    [[this.#bonus, 15, 25], [this.#turbo, 12, 23], [this.#autoplayCount, 12, 21],
+      [this.#autoplayToggle, 12, 22], [this.#audio, 11, 22], [this.#spin, 11, 18],
+      [this.#betMinus, 22, 36], [this.#betPlus, 22, 36]]
+      .forEach(([button, desktop, mobile]) => button.setFontSize(this.#portrait ? mobile : desktop));
+    [[this.#bonus, 220, 44, 304, 84], [this.#turbo, 220, 32, 164, 84],
+      [this.#audio, 132, 32, 184, 84], [this.#rulesButton, 32, 32, 84, 84],
+      [this.#autoplayCount, 82, 36, 112, 84], [this.#autoplayToggle, 126, 36, 200, 84],
+      [this.#betMinus, 34, 34, 84, 84], [this.#betPlus, 34, 34, 84, 84],
+      [this.#spin, 112, 112, 152, 152], [this.#resetBalance, 150, 34, 220, 84]]
+      .forEach(([button, dw, dh, mw, mh]) => button.setSize(this.#portrait ? mw : dw, this.#portrait ? mh : dh));
+    this.#rulesButton.setFontSize(this.#portrait ? 32 : 20);
+    [this.#balance, this.#bet, this.#win].forEach((readout) => readout.setCaptionSize(this.#portrait ? 18 : 12));
+    this.#balance.setValueSize(this.#portrait ? 32 : 26);
+    this.#bet.setValueSize(this.#portrait ? 32 : 24);
+    this.#win.setValueSize(this.#portrait ? 34 : 28);
+    this.#stepLabel.position.set(this.#portrait ? 360 : 620, this.#portrait ? 681 : 600);
+    this.#stepLabel.style ??= {};
+    this.#stepLabel.style.fontSize = this.#portrait ? 25 : 18;
+    this.#autoplayStatus.style ??= {};
+    this.#autoplayStatus.style.fontSize = this.#portrait ? 20 : 12;
+    const fields = { title: this.#title, free: this.#free, mult: this.#mult, hint: this.#hint,
+      banner: this.#banner, win: this.#win, balance: this.#balance, bet: this.#bet,
+      betMinus: this.#betMinus, betPlus: this.#betPlus, spin: this.#spin, turbo: this.#turbo,
+      bonus: this.#bonus, autoplayCount: this.#autoplayCount, autoplayToggle: this.#autoplayToggle,
+      autoplayStatus: this.#autoplayStatus, resetBalance: this.#resetBalance, audio: this.#audio, rules: this.#rulesButton };
+    Object.entries(fields).forEach(([key, view]) => view.position.set(...p[key]));
+    this.#subtitle.position.set(p.title[0], orientation === 'portrait' ? 102 : 87);
     this.#rulesPanel.layout(orientation);
+    this.#drawSurfaces(orientation, p);
     this.#bannerShade.position.set(...p.banner);
-    this.#bannerShade.clear().rect(-380, -70, 760, 140).fill({ color: 0x000000 });
-
-    const design = orientation === 'landscape' ? { width: 1280, height: 720 } : { width: 720, height: 1280 };
-    const dialogWidth = orientation === 'landscape' ? 680 : 620;
+    const portrait = orientation === 'portrait';
+    const bannerWidth = portrait ? 640 : 700;
+    this.#bannerShade.clear().roundRect(-bannerWidth / 2, -65, bannerWidth, 130, 18)
+      .fill({ color: UI.surface, alpha: 0.96 });
+    const design = portrait ? { width: 720, height: 1280 } : { width: 1280, height: 720 };
+    const dialogWidth = portrait ? 620 : 640;
     this.#purchaseDialog.position.set(design.width / 2, design.height / 2);
-    this.#purchaseShade.clear().rect(-design.width / 2, -design.height / 2, design.width, design.height).fill({ color: 0x000000, alpha: 0.72 });
-    this.#purchasePanel.clear().roundRect(-dialogWidth / 2, -160, dialogWidth, 320, 24)
-      .fill({ color: COLORS.panel }).stroke({ width: 4, color: COLORS.panelEdge });
-    this.#purchaseTitle.position.set(0, -92);
-    this.#purchaseCost.position.set(0, -35);
-    this.#purchaseYes.position.set(-105, 82);
-    this.#purchaseCancel.position.set(105, 82);
+    this.#purchaseShade.clear().rect(-design.width / 2, -design.height / 2, design.width, design.height)
+      .fill({ color: 0x030907, alpha: 0.8 });
+    const dialogHeight = portrait ? 380 : 304;
+    this.#purchasePanel.clear().roundRect(-dialogWidth / 2, -dialogHeight / 2, dialogWidth, dialogHeight, 20)
+      .fill({ color: UI.surface }).stroke({ width: 1, color: UI.edge, alpha: 0.5 });
+    this.#purchaseTitle.position.set(0, portrait ? -110 : -83);
+    this.#purchaseCost.position.set(0, portrait ? -35 : -26);
+    this.#purchaseYes.position.set(portrait ? -140 : -100, portrait ? 100 : 78);
+    this.#purchaseCancel.position.set(portrait ? 140 : 100, portrait ? 100 : 78);
+    [this.#purchaseYes, this.#purchaseCancel].forEach(button => {
+      button.setSize(portrait ? 240 : 170, portrait ? 84 : 54);
+      button.setFontSize(portrait ? 26 : 18);
+    });
+    this.#purchaseTitle.style ??= {}; this.#purchaseCost.style ??= {};
+    this.#purchaseTitle.style.fontSize = portrait ? 32 : 28;
+    this.#purchaseCost.style.fontSize = portrait ? 32 : 24;
+  }
+
+  #drawSurfaces(orientation, p) {
+    const portrait = orientation === 'portrait';
+    this.#titleSign.clear();
+    this.#titleSign.rect(p.title[0] - 72, portrait ? 122 : 105, 144, 1)
+      .fill({ color: UI.gold, alpha: 0.3 });
+    this.#controlPanel.clear(); this.#statsPanel.clear();
+    const surface = (graphics, x, y, w, h, radius) => {
+      graphics.roundRect(x, y + 7, w, h, radius).fill({ color: 0x030907, alpha: 0.3 })
+        .roundRect(x, y, w, h, radius).fill({ color: UI.surface, alpha: 0.82 })
+        .stroke({ width: 1, color: UI.edge, alpha: 0.3 })
+        .rect(x + 24, y + 1, w - 48, 1).fill({ color: 0xffffff, alpha: 0.055 });
+    };
+    if (portrait) {
+      surface(this.#statsPanel, 56, 706, 608, 152, 16);
+      this.#statsPanel.rect(360, 731, 1, 43).fill({ color: UI.edge, alpha: 0.16 })
+        .rect(80, 788, 560, 1).fill({ color: UI.edge, alpha: 0.12 });
+      surface(this.#controlPanel, 56, 864, 608, 278, 18);
+    } else {
+      // The chef and the bonus pot occupy the reserved left area.
+      surface(this.#statsPanel, 316, 622, 608, 66, 14);
+      this.#statsPanel.rect(490, 638, 1, 34).fill({ color: UI.edge, alpha: 0.18 })
+        .rect(748, 638, 1, 34).fill({ color: UI.edge, alpha: 0.18 });
+      surface(this.#controlPanel, 965, 164, 260, 382, 18);
+      this.#controlPanel.rect(983, 219, 224, 1).fill({ color: UI.edge, alpha: 0.12 });
+    }
+  }
+
+  update(deltaMS) {
+    this.#spin.update(deltaMS);
+    this.#chef.update(deltaMS);
+    this.#feature.update(deltaMS);
+  }
+
+  beginRound() {
+    this.#stepToken++;
+    this.#stepLabel.alpha = 0;
+    this.#spinMode = 'base';
+    this.#chef.resetRound();
+    this.#mult.visible = true;
+    this.setMultiplier(0);
+  }
+
+  setSpinMode(mode) {
+    if (mode === 'free' && this.#spinMode !== 'free') this.#chef.startBonus();
+    this.#spinMode = mode;
+    this.#mult.visible = mode !== 'free';
+    if (mode === 'free') { this.#mult.text = ''; this.#hint.visible = false; }
+  }
+
+  finishRound() { if (this.#spinMode === 'free') this.#chef.finishBonus(); }
+
+  get hasModal() { return this.#rulesPanel.visible || this.#purchaseDialog.visible || this.#feature.visible; }
+
+  dismissModal() {
+    if (this.#rulesPanel.visible) { this.#rulesPanel.hide(); return true; }
+    if (this.#purchaseDialog.visible) { this.#finishPurchase(false); return true; }
+    if (this.#feature.visible) { this.#feature.dismiss(); return true; }
+    return false;
+  }
+
+  showBonusIntro({ spins }) {
+    return this.#feature.show({ eyebrow: 'ŞEF OCAĞI YAKIYOR', title: 'BONUS BAŞLIYOR',
+      value: `${spins} DÖNÜŞ`, detail: 'Çarpanları biriktir, ateşi harla.',
+      note: 'Çarpan toplamı bonus boyunca korunur.', hold: 2200, button: 'HADİ PİŞİRELİM' });
+  }
+
+  showBonusRetrigger({ spins, remaining }) {
+    this.#chef.celebrate?.('big');
+    return this.#feature.show({ eyebrow: 'OCAK AÇIK KALIYOR', title: 'EK BEDAVA DÖNÜŞ',
+      value: `+${spins}`, detail: `${remaining} dönüş daha seni bekliyor.`,
+      note: 'Biriken çarpanla devam!', hold: 1500 });
+  }
+
+  showBonusSummary({ win, multiplier, spins }) {
+    this.#chef.celebrate?.('super');
+    return this.#feature.show({ eyebrow: 'SERVİS HAZIR', title: 'BONUS TAMAMLANDI', amount: win,
+      detail: `${spins} bedava dönüş  ·  x${multiplier} biriken çarpan`,
+      note: 'TOPLAM TUR KAZANCI', hold: null, button: 'HARİKA, DEVAM ET' });
+  }
+
+  showWinCelebration({ win, multiplier, tier, capped }) {
+    this.#chef.celebrate?.(tier);
+    const title = capped ? 'MAKSİMUM KAZANÇ' : { big: 'BÜYÜK KAZANÇ', mega: 'MUHTEŞEM KAZANÇ', super: 'OLAĞANÜSTÜ KAZANÇ' }[tier];
+    return this.#feature.show({ eyebrow: 'ŞEFİN İMZASI', title, amount: win,
+      detail: `${Number(multiplier.toFixed(2)).toLocaleString('tr-TR')}x bahis`,
+      note: capped ? 'Maksimum ödeme tutarına ulaşıldı.' : 'Afiyetle kazandın!', hold: 2100 });
+  }
+
+  showStepWin({ amount, ways }) {
+    const token = ++this.#stepToken;
+    this.#stepLabel.text = `+${fmt(amount)}${ways ? `  ·  ${ways} YOL` : ''}`;
+    this.#stepLabel.alpha = 1;
+    this.#animator.wait(1500).then(() => {
+      if (token === this.#stepToken) return this.#animator.tween(this.#stepLabel, { alpha: 0 }, 200);
+    });
   }
 
   // ---------- Değer göstergeleri ----------
@@ -147,11 +276,12 @@ export class Hud extends Container {
 
   setBankrupt(isBankrupt) {
     this.#resetBalance.visible = isBankrupt;
+    this.#balance.visible = !isBankrupt;
   }
 
   setAudioEnabled(enabled) {
     this.#audio.setLabel(enabled ? 'SES AÇIK' : 'SES KAPALI');
-    this.#audio.setFill(enabled ? 0x2e9d6b : COLORS.button);
+    this.#audio.setFill(enabled ? 0x1c2824 : 0x151f1b);
   }
 
   setBet(value) {
@@ -173,7 +303,9 @@ export class Hud extends Container {
 
   /** 0 verilirse gizler. */
   setMultiplier(value) {
+    if (this.#spinMode === 'free') { this.#chef.setTotal(value); return; }
     this.#mult.text = value > 0 ? `ÇARPAN x${value}` : '';
+    this.#hint.visible = value <= 0 && !this.#portrait;
     if (value > 0) {
       this.#mult.scale.set(1.35);
       this.#animator.tween(this.#mult, { scale: 1 }, 260, (t) => easeOutBack(t, 1.5));
@@ -182,22 +314,31 @@ export class Hud extends Container {
 
   /** Çarpan sembolünden HUD göstergesine kısa bir parıltı uçurur. */
   flyMultiplier(value, origin) {
-    const flyer = text(`+${value}`, 24, COLORS.gold);
+    if (!origin) return;
+    const inBonus = this.#spinMode === 'free';
+    const target = inBonus ? this.#chef.collectionTarget : { x: this.#mult.x, y: this.#mult.y };
+    const flyer = text('+' + value, 27, COLORS.gold, { stroke: { color: 0x331609, width: 4 } });
     flyer.anchor.set(0.5);
     flyer.position.set(origin.x, origin.y);
-    flyer.scale.set(0.65);
     this.addChild(flyer);
-    this.#animator.tween(flyer, {
-      x: this.#mult.x,
-      y: this.#mult.y,
-      scale: 0.35,
-      alpha: 0,
-    }, TIMING.collect, easeOutQuad).then(() => flyer.destroy({ children: true }));
+    const progress = { t: 0 };
+    const control = { x: (origin.x + target.x) / 2, y: Math.min(origin.y, target.y) - 95 };
+    this.#animator.tween(progress, { t: 1 }, TIMING.collect + 120, easeOutQuad, () => {
+      const t = progress.t, u = 1 - t;
+      flyer.position.set(u * u * origin.x + 2 * u * t * control.x + t * t * target.x,
+        u * u * origin.y + 2 * u * t * control.y + t * t * target.y);
+      flyer.scale.set(0.8 + Math.sin(t * Math.PI) * 0.3);
+      flyer.alpha = t < 0.8 ? 1 : (1 - t) / 0.2;
+    }).then(() => {
+      if (inBonus) this.#chef.collectPulse();
+      flyer.destroy({ children: true });
+    });
   }
 
   /** { current, total } ya da null (gizle). */
   setFreeSpins(info) {
     this.#free.text = info ? `BEDAVA DÖNÜŞ  ${info.current} / ${info.total}` : '';
+    this.#subtitle.visible = !info;
   }
 
   /** Oyuncudan bonus satın alma onayı alır; iptal edilirse false döner. */
@@ -219,6 +360,7 @@ export class Hud extends Container {
   setAutoplay({ selected, remaining, running }) {
     this.#autoplayCount.setLabel(`OTO ×${selected}`);
     this.#autoplayToggle.setLabel(running ? 'DURDUR' : 'OTO BAŞLAT');
+    this.#autoplayToggle.setSelected(running);
     this.#autoplayStatus.text = running ? `KALAN ${remaining} TUR` : '';
   }
 
@@ -239,7 +381,8 @@ export class Hud extends Container {
   // ---------- Kontrol durumları ----------
 
   setTurbo(on) {
-    this.#turbo.setFill(on ? 0x2e9d6b : COLORS.button);
+    this.#turbo.setSelected(on);
+    this.#turbo.setLabel(on ? 'TURBO AÇIK' : 'TURBO');
   }
 
   setControls({ canSpin, canChangeBet, canBuyBonus = false, canAutoplay = false, autoplayRunning = false }) {
@@ -249,5 +392,6 @@ export class Hud extends Container {
     this.#bonus.setEnabled(canBuyBonus);
     this.#autoplayCount.setEnabled(canAutoplay);
     this.#autoplayToggle.setEnabled(canAutoplay || autoplayRunning);
+    this.#rulesButton.setEnabled(canChangeBet);
   }
 }

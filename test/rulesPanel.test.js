@@ -2,16 +2,31 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fake from './helpers/fakePixi.js';
 
-mock.module('pixi.js', { namedExports: { Container: fake.Container, Graphics: fake.Graphics, Text: fake.Text } });
+mock.module('pixi.js', { namedExports: { Container: fake.Container, Graphics: fake.Graphics, Text: fake.Text, Sprite: fake.Sprite, Assets: fake.Assets } });
 
 const { getPaytableRows, getRulesLines, RulesPanel } = await import('../src/view/RulesPanel.js');
-const { PAY, PAY_SCALE, PAY_SYMBOLS, RULES, WILD_REELS, MULTS } = await import('../src/game/config.js');
+const { getSymbolPays, PAY_SYMBOLS, RULES, WILD_REELS, MULTS } = await import('../src/game/config.js');
 
 test('ödeme tablosu sembol ve değerlerini config.js dosyasından üretir', () => {
-  const rows = getPaytableRows();
-  assert.deepEqual(rows.map((row) => row.symbol), PAY_SYMBOLS);
-  for (const row of rows)
-    assert.deepEqual(row.pays, PAY[row.symbol].map((value) => value * PAY_SCALE.base));
+  for (const mode of ['base', 'free']) {
+    const rows = getPaytableRows(mode);
+    assert.deepEqual(rows.map((row) => row.symbol), PAY_SYMBOLS);
+    for (const row of rows) assert.deepEqual(row.pays, getSymbolPays(row.symbol, mode));
+  }
+});
+
+test('ana oyun ve bedava dönüş sekmeleri motorun gerçek oranlarını gösterir', () => {
+  const panel = new RulesPanel();
+  panel.layout('landscape');
+  const card = panel.children.find(child => child.row?.symbol === PAY_SYMBOLS[0]);
+  const free = panel.children.find(child => child.children?.some(item => item.text === 'BEDAVA DÖNÜŞ'));
+  free.emit('pointertap');
+  assert.deepEqual(card.row.pays, getSymbolPays(PAY_SYMBOLS[0], 'free'));
+  panel.layout('portrait');
+  assert.deepEqual(card.row.pays, getSymbolPays(PAY_SYMBOLS[0], 'free'), 'yön değişikliği seçili modu korur');
+  panel.setMode('base');
+  assert.deepEqual(card.row.pays, getSymbolPays(PAY_SYMBOLS[0], 'base'));
+  assert.match(card.valuesText.text, /3 makara: \d+,\d{2}x/);
 });
 
 test('kurallar ekranı özel sembol ve oyun ayarlarını config.js üzerinden açıklar', () => {

@@ -1,4 +1,6 @@
 const PREFERENCE_KEY = 'mutfak-slot.audio-enabled.v1';
+const MAX_VOICES = 20;
+const COOLDOWN = { spin: 0.08, drop: 0.055, burst: 0.095, multiplier: 0.09, sizzle: 0.24, tumbleWin: 0.15 };
 
 const SOUNDS = {
   spin: [{ frequency: 230, end: 150, duration: 0.11, type: 'triangle', volume: 0.045 }],
@@ -8,8 +10,21 @@ const SOUNDS = {
     { frequency: 310, end: 170, duration: 0.13, type: 'triangle', volume: 0.025, delay: 0.035 },
   ],
   multiplier: [
-    { frequency: 440, duration: 0.09, type: 'sine', volume: 0.04 },
-    { frequency: 660, duration: 0.12, type: 'sine', volume: 0.045, delay: 0.065 },
+    { frequency: 587, end: 560, duration: 0.09, type: 'sine', volume: 0.035 },
+    { frequency: 880, end: 830, duration: 0.17, type: 'sine', volume: 0.04, delay: 0.055 },
+  ],
+  // Kısa kızartma sesi; sürekli bir döngü veya harici ses dosyası oluşturmaz.
+  sizzle: [{ noise: true, duration: 0.22, volume: 0.045 }],
+  tumbleWin: [{ frequency: 784, end: 920, duration: 0.14, type: 'sine', volume: 0.035 }],
+  multiplyWin: [
+    { frequency: 392, duration: 0.13, type: 'sine', volume: 0.04 },
+    { frequency: 587, duration: 0.18, type: 'sine', volume: 0.045, delay: 0.085 },
+    { frequency: 784, duration: 0.22, type: 'sine', volume: 0.04, delay: 0.17 },
+  ],
+  bonusEnd: [
+    { frequency: 784, duration: 0.18, type: 'triangle', volume: 0.045 },
+    { frequency: 659, duration: 0.18, type: 'triangle', volume: 0.04, delay: 0.11 },
+    { frequency: 523, duration: 0.32, type: 'sine', volume: 0.05, delay: 0.22 },
   ],
   scatter: [
     { frequency: 660, duration: 0.12, type: 'sine', volume: 0.045 },
@@ -47,6 +62,9 @@ export class AudioManager {
   #createContext;
   #context = null;
   #enabled = this.#readPreference();
+  #voices = new Set();
+  #lastPlayed = new Map();
+  #sizzleBuffer = null;
 
   constructor({ createContext = () => {
     const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
@@ -79,32 +97,79 @@ export class AudioManager {
       // Ses tercihi saklanamasa da oyun çalışmaya devam eder.
     }
     if (this.#enabled) this.unlock();
+    else this.#stopAll();
   }
 
   play(name) {
     if (!this.#enabled || !this.#context) return;
+    const now = this.#context.currentTime;
+    const last = this.#lastPlayed.get(name) ?? -Infinity;
+    if (now - last < (COOLDOWN[name] ?? 0.08)) return;
+    this.#lastPlayed.set(name, now);
+    for (const voice of this.#voices) if (voice.end <= now) this.#release(voice);
     for (const note of SOUNDS[name] ?? []) this.#playNote(note);
   }
 
-  #playNote({ frequency, end = frequency, duration, type, volume, delay = 0 }) {
+  #playNote({ frequency, end = frequency, duration, type, volume, delay = 0, noise = false }) {
+    if (this.#voices.size >= MAX_VOICES) return;
+    let voice;
     try {
       const context = this.#context;
       const start = context.currentTime + delay;
-      const oscillator = context.createOscillator();
+      const source = noise ? this.#createSizzle() : context.createOscillator();
+      if (!source) return;
       const gain = context.createGain();
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(frequency, start);
-      oscillator.frequency.linearRampToValueAtTime(end, start + duration);
+      if (!noise) {
+        source.type = type;
+        source.frequency.setValueAtTime(frequency, start);
+        source.frequency.linearRampToValueAtTime(end, start + duration);
+      }
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.linearRampToValueAtTime(volume, start + 0.012);
       gain.gain.linearRampToValueAtTime(0.0001, start + duration);
-      oscillator.connect(gain);
+      source.connect(gain);
       gain.connect(context.destination);
-      oscillator.start(start);
-      oscillator.stop(start + duration + 0.015);
+      voice = { source, gain, end: start + duration + 0.015 };
+      this.#voices.add(voice);
+      source.onended = () => this.#release(voice);
+      source.start(start);
+      source.stop(voice.end);
     } catch {
+      if (voice) this.#release(voice);
       // Bazı gömülü tarayıcılarda ses donanımı erişilemeyebilir.
     }
+  }
+
+  #createSizzle() {
+    const context = this.#context;
+    if (!context.createBuffer || !context.createBufferSource) return null;
+    if (!this.#sizzleBuffer) {
+      const rate = context.sampleRate || 44100;
+      this.#sizzleBuffer = context.createBuffer(1, Math.ceil(rate * 0.25), rate);
+      const data = this.#sizzleBuffer.getChannelData(0);
+      let warm = 0;
+      for (let index = 0; index < data.length; index++) {
+        const noise = Math.random() * 2 - 1;
+        warm = warm * 0.86 + noise * 0.14;
+        data[index] = warm * 0.65 + noise * 0.13;
+      }
+    }
+    const source = context.createBufferSource();
+    source.buffer = this.#sizzleBuffer;
+    return source;
+  }
+
+  #release(voice) {
+    if (!this.#voices.delete(voice)) return;
+    try { voice.source.disconnect?.(); voice.gain.disconnect?.(); } catch { /* ses aygıtı kapanmış olabilir */ }
+  }
+
+  #stopAll() {
+    for (const voice of [...this.#voices]) {
+      try { voice.source.stop(); } catch { /* tamamlanmış ses */ }
+      this.#release(voice);
+    }
+    this.#lastPlayed.clear();
   }
 
   #readPreference() {

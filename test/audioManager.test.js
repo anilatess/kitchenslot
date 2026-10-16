@@ -77,3 +77,57 @@ test('WebAudio olmayan veya depolaması kapalı ortamda hata dışarı taşmaz',
     else delete globalThis.localStorage;
   }
 });
+
+function trackedContext() {
+  const context = fakeContext();
+  context.sources = [];
+  context.buffers = 0;
+  context.sampleRate = 8000;
+  const createOscillator = context.createOscillator.bind(context);
+  const track = (source) => {
+    source.immediateStops = 0;
+    source.disconnected = 0;
+    source.stop = (time) => { if (time === undefined) source.immediateStops++; };
+    source.disconnect = () => source.disconnected++;
+    context.sources.push(source);
+    return source;
+  };
+  context.createOscillator = () => track(createOscillator());
+  context.createBuffer = (_channels, length) => {
+    context.buffers++;
+    return { getChannelData: () => new Float32Array(length) };
+  };
+  context.createBufferSource = () => track({ connect() {}, start() {} });
+  return context;
+}
+
+test('hızlı çarpan toplama sesleri yinelenmez ve kaynaklar sınırlı tutulur', () => {
+  const context = trackedContext();
+  const audio = new AudioManager({ createContext: () => context });
+  audio.unlock();
+  for (let index = 0; index < 100; index++) {
+    audio.play('multiplier');
+    audio.play('sizzle');
+  }
+  assert.equal(context.sources.length, 3, 'aynı anda iki nota ve bir kısa kızartma sesi yeterli');
+  for (const cue of ['freeSpin', 'bigWin', 'megaWin', 'superWin', 'bonusEnd', 'multiplyWin', 'burst', 'drop']) audio.play(cue);
+  assert.ok(context.sources.length <= 20, 'efektler üst üste geldiğinde polifoni sınırı korunmalı');
+  audio.setEnabled(false);
+  assert.ok(context.sources.every((source) => source.immediateStops === 1));
+  assert.ok(context.sources.every((source) => source.disconnected === 1));
+});
+
+test('kızartma tamponu tekrar kullanılır; biten kaynaklar sonraki efektlere yer açar', () => {
+  const context = trackedContext();
+  const audio = new AudioManager({ createContext: () => context });
+  audio.unlock();
+  audio.play('sizzle');
+  context.currentTime = 1;
+  audio.play('sizzle');
+  assert.equal(context.buffers, 1);
+  assert.equal(context.sources.length, 2);
+  assert.equal(context.sources[0].disconnected, 1);
+  context.currentTime = 2;
+  audio.play('freeSpin');
+  assert.equal(context.oscillators, 3);
+});

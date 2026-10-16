@@ -12,7 +12,7 @@ mock.module('pixi.js', {
   },
 });
 
-const { createSymbolSkin, loadSymbolAtlas } = await import('../src/view/skins.js');
+const { createSymbolSkin, loadSymbolAtlas, loadSymbolImages } = await import('../src/view/skins.js');
 const { CELL } = await import('../src/core/constants.js');
 
 test('atlas sembolü sprite olarak üretir ve çarpan değerini üstte gösterir', async () => {
@@ -50,4 +50,37 @@ test('atlasta tekil kare yoksa o sembol emoji yedeğini kullanır', async () => 
   const missing = createSymbolSkin(1);
   assert.ok(missing instanceof fake.Container);
   assert.equal(missing.children[1].text, '🧄');
+});
+
+
+test('PNG semboller yüklenir; eksik dosya diğer sembolleri engellemez', async () => {
+  const loaded = [];
+  fake.Assets.load = async (url) => {
+    loaded.push(url);
+    if (url.endsWith('/garlic.png')) throw new Error('eksik PNG');
+    return { id: url };
+  };
+  assert.equal(await loadSymbolImages('/game/assets/symbols/'), 11);
+  assert.equal(loaded.length, 12);
+  const tomato = createSymbolSkin(0);
+  const sprite = tomato.children.find((child) => child instanceof fake.Sprite);
+  assert.equal(sprite.texture.id, '/game/assets/symbols/tomato.png');
+  const garlic = createSymbolSkin(1);
+  assert.equal(garlic.children[1].text, '🧄');
+});
+
+test('aynı alev PNG üzerinde her gerçek çarpan değeri ayrı yazılır', () => {
+  for (const value of [2, 5, 25, 100]) {
+    const skin = createSymbolSkin(100 + value);
+    const sprite = skin.children.find((child) => child instanceof fake.Sprite);
+    assert.equal(sprite.texture.id, '/game/assets/symbols/multiplier.png');
+    const labels = skin.children.filter((child) => child instanceof fake.Text);
+    assert.deepEqual(labels.map((child) => child.text), ['x' + value]);
+  }
+});
+
+test('bütün PNG yüklemeleri başarısızsa önceki atlas çalışmaya devam eder', async () => {
+  fake.Assets.load = async () => { throw new Error('PNG yok'); };
+  assert.equal(await loadSymbolImages('/missing/'), 0);
+  assert.ok(createSymbolSkin(0) instanceof fake.Sprite);
 });

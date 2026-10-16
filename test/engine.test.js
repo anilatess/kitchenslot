@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from '../src/game/rng.js';
-import { playSpin, playRound, mulCell, isMul } from '../src/game/engine.js';
-import { SYM, COLS, ROWS, RULES, PAY, PAY_SCALE } from '../src/game/config.js';
+import { playSpin, playRound, playSpinFromGrid, mulCell, isMul } from '../src/game/engine.js';
+import { SYM, COLS, ROWS, RULES, PAY_SYMBOLS, getSymbolPays } from '../src/game/config.js';
 
 test('aynı seed aynı sonucu verir', () => {
   const a = playRound(createRng(7), { record: true });
@@ -83,10 +83,9 @@ test('tavan: hiçbir tur 1000x geçmez; satın alma bonus dönüş sayısı >= 1
   }
 });
 
-test('ways hesabı: elle kurulan gridde beklenen ödeme', async () => {
+test('ways hesabı: elle kurulan gridde beklenen ödeme', () => {
   // Domates: 1. makarada 2, 2. makarada 1 (+1 wild), 3. makarada 1, 4. makarada yok
   // yol sayısı = 2 x 2 x 1 = 4, uzunluk 3
-  const { playSpinFromGrid } = await import('../src/game/engine.js');
   const T = SYM.TOM, X = SYM.SCT;
   const grid = [
     [T, T, X, X],
@@ -96,8 +95,35 @@ test('ways hesabı: elle kurulan gridde beklenen ödeme', async () => {
     [X, X, X, X],
   ];
   const res = playSpinFromGrid(grid, 'base');
-  const expected = PAY[T][0] * 4 * PAY_SCALE.base;
+  const expected = 0.01 * 4;
   assert.ok(Math.abs(res.pay - expected) < 1e-9, `${res.pay} vs ${expected}`);
   assert.equal(res.wins[0].ways, 4);
   assert.equal(res.wins[0].length, 3);
+});
+
+test('ödeme tablosundaki iki basamaklı katsayılar her iki modda da doğrudan uygulanır', () => {
+  for (const mode of ['base', 'free']) {
+    for (const symbol of PAY_SYMBOLS) {
+      const pays = getSymbolPays(symbol, mode);
+      assert.equal(pays.length, 3);
+      for (let index = 0; index < pays.length; index++) {
+        const pay = pays[index];
+        assert.ok(pay > 0);
+        assert.ok(Math.abs(pay * 100 - Math.round(pay * 100)) < 1e-9, 'en fazla iki ondalık basamak');
+        if (index) assert.ok(pay > pays[index - 1], 'daha uzun eşleşme daha fazla ödemeli');
+        const length = RULES.minWayLength + index;
+        const grid = Array.from({ length: COLS }, (_, col) =>
+          col < length ? [symbol, SYM.SCT, SYM.SCT, SYM.SCT] : Array(ROWS).fill(SYM.SCT));
+        const result = playSpinFromGrid(grid, mode);
+        assert.equal(result.wins.length, 1);
+        assert.equal(result.wins[0].ways, 1);
+        assert.equal(result.pay, pay, 'tabloda görünen değer dışında ölçek uygulanmamalı');
+      }
+    }
+  }
+  // Beş makarada dört sarımsak yolu: ana oyun 4 × 0,12, bonus 4 × 0,10.
+  const G = SYM.GAR, X = SYM.SCT;
+  const garlicGrid = [[G, G, X, X], [G, G, X, X], [G, X, X, X], [G, X, X, X], [G, X, X, X]];
+  assert.equal(playSpinFromGrid(garlicGrid, 'base').pay, 0.48);
+  assert.equal(playSpinFromGrid(garlicGrid, 'free').pay, 0.40);
 });

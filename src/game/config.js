@@ -32,27 +32,40 @@ export const SYMBOL_VIEW = {
 // Sembol seti: 7 veya 9 ödeyen sembol (SYMSET ortam değişkeni ile denenir)
 const SYMSET = Number(globalThis.process?.env?.SYMSET ?? 9);
 
-// Ödeme tablosu: bahsın katı olarak, "her yol" başına. [3 makara, 4 makara, 5 makara]
-// Toplam ödeme = tablo değeri x yol sayısı
-// Ana oyun ve bedava dönüş için ayrı ödeme ölçeği (RTP kalibrasyonu)
-export const PAY_SCALE = {
-  base: Number(globalThis.process?.env?.PSBASE ?? 9.6),
-  free: Number(globalThis.process?.env?.PSFREE ?? 8.6),
+// Ödeme tablosu: her kazanan yol için doğrudan bahsin katı.
+// Diziler sırasıyla 3, 4 ve 5 ardışık makarayı gösterir.
+// Ana oyun ve bedava dönüş değerlerinde gizli ölçek uygulanmaz.
+const BASE_PAY = {
+  [SYM.TOM]: [0.01, 0.03, 0.09],
+  [SYM.GAR]: [0.01, 0.04, 0.12],
+  [SYM.CHI]: [0.01, 0.05, 0.14],
+  [SYM.CAR]: [0.02, 0.05, 0.17],
+  [SYM.ONI]: [0.02, 0.06, 0.18],
+  [SYM.MUS]: [0.02, 0.07, 0.21],
+  [SYM.DUM]: [0.03, 0.12, 0.35],
+  [SYM.SUS]: [0.06, 0.22, 0.69],
+  [SYM.STK]: [0.12, 0.42, 1.38],
 };
-const PAY7 = {
-  [SYM.TOM]: [1.0, 3.2, 9.6], [SYM.GAR]: [1.2, 4.0, 12], [SYM.CHI]: [1.4, 4.8, 14.4],
-  [SYM.CAR]: [1.6, 5.6, 17.6], [SYM.DUM]: [3.2, 12, 36], [SYM.SUS]: [6, 22.4, 72], [SYM.STK]: [12, 44, 144],
+const FREE_PAY = {
+  [SYM.TOM]: [0.01, 0.03, 0.08],
+  [SYM.GAR]: [0.01, 0.03, 0.10],
+  [SYM.CHI]: [0.01, 0.04, 0.12],
+  [SYM.CAR]: [0.01, 0.05, 0.15],
+  [SYM.ONI]: [0.02, 0.06, 0.17],
+  [SYM.MUS]: [0.02, 0.06, 0.19],
+  [SYM.DUM]: [0.03, 0.10, 0.31],
+  [SYM.SUS]: [0.05, 0.19, 0.62],
+  [SYM.STK]: [0.10, 0.38, 1.24],
 };
-const PAY9 = {
-  [SYM.TOM]: [1.0, 3.2, 9.6], [SYM.GAR]: [1.2, 4.0, 12], [SYM.CHI]: [1.4, 4.8, 14.4],
-  [SYM.CAR]: [1.6, 5.6, 17.6], [SYM.ONI]: [1.8, 6.4, 19.2], [SYM.MUS]: [2.0, 7.2, 21.6],
-  [SYM.DUM]: [3.2, 12, 36], [SYM.SUS]: [6, 22.4, 72], [SYM.STK]: [12, 44, 144],
-};
-const RAWPAY = SYMSET === 7 ? PAY7 : PAY9;
-// tablo değerleri "bahsın binde biri" biriminde yazıldı
-export const PAY = Object.fromEntries(
-  Object.entries(RAWPAY).map(([k, v]) => [k, v.map((x) => x / 1000)])
-);
+function activePays(table) {
+  return Object.fromEntries(Object.entries(table).filter(([id]) =>
+    SYMSET !== 7 || (Number(id) !== SYM.ONI && Number(id) !== SYM.MUS)));
+}
+export const PAY_TABLES = { base: activePays(BASE_PAY), free: activePays(FREE_PAY) };
+export const getSymbolPays = (symbol, mode = 'base') => PAY_TABLES[mode]?.[symbol];
+// Önceki tabloyu kullanan araçlar için ana oyun tablosu ve etkisiz ölçek.
+export const PAY = PAY_TABLES.base;
+export const PAY_SCALE = { base: 1, free: 1 };
 export const PAY_SYMBOLS = Object.keys(PAY).map(Number);
 
 // Sembol ağırlıkları (hücre başına). Wild sadece 2-4. makarada çıkar.

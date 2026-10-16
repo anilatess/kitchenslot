@@ -3,7 +3,7 @@
 //  Hem oyun (Pixi) hem simülasyon aynı dosyayı kullanır.
 //  Tüm kazançlar "bahsın katı" cinsindendir (bet = 1).
 // ============================================================
-import { COLS, ROWS, SYM, PAY, PAY_SCALE, PAY_SYMBOLS, WEIGHTS, WILD_REELS, MULTS, RULES } from './config.js';
+import { COLS, ROWS, SYM, getSymbolPays, PAY_SYMBOLS, WEIGHTS, WILD_REELS, MULTS, RULES } from './config.js';
 
 export const isMul = (c) => c >= 100;
 export const mulValue = (c) => c - 100;
@@ -67,7 +67,7 @@ function evalWays(grid, mode) {
     const len = counts.length;
     if (len < RULES.minWayLength) continue;
     const ways = counts.reduce((a, b) => a * b, 1);
-    const p = PAY[s][len - RULES.minWayLength] * ways * PAY_SCALE[mode];
+    const p = getSymbolPays(s, mode)[len - RULES.minWayLength] * ways;
     pay += p;
     wins.push({ symbol: s, length: len, ways, pay: p });
     for (let c = 0; c < len; c++)

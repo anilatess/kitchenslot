@@ -1,13 +1,13 @@
 import { Container, Graphics } from 'pixi.js';
 import { COLS, ROWS, SYM } from '../game/config.js';
 import { isMul } from '../game/engine.js';
-import { CELL, COLORS, TIMING } from '../core/constants.js';
+import { CELL, TIMING } from '../core/constants.js';
 import { easeInQuad, easeOutBack, easeOutQuad, easeInBack } from '../animation/easing.js';
 import { SymbolView } from './SymbolView.js';
 
 const WIDTH = COLS * CELL;
 const HEIGHT = ROWS * CELL;
-const ORIGIN = { landscape: { x: 360, y: 105 }, portrait: { x: 80, y: 250 } };
+const ORIGIN = { landscape: { x: 340, y: 140 }, portrait: { x: 80, y: 205 } };
 
 // 5x4 sembol ızgarası. Sadece "ne gösterilecek" ile ilgilenir;
 // oyunun sonucunu hesaplamaz, motorun ürettiği adımları oynatır.
@@ -15,6 +15,7 @@ export class GridView extends Container {
   #animator;
   #layer = new Container();
   #particles = new Container();
+  #reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
   /** @type {(SymbolView|null)[][]} [kolon][satır] */
   #symbols = [];
 
@@ -23,9 +24,23 @@ export class GridView extends Container {
     this.#animator = animator;
 
     const panel = new Graphics()
-      .roundRect(-16, -16, WIDTH + 32, HEIGHT + 32, 24)
-      .fill({ color: COLORS.panel })
-      .stroke({ width: 4, color: COLORS.panelEdge });
+      // Same forest surface and fine champagne edge as the controls.
+      .roundRect(-27, -22, WIDTH + 54, HEIGHT + 54, 26)
+      .fill({ color: 0x080e0b, alpha: 0.6 })
+      .roundRect(-24, -28, WIDTH + 48, HEIGHT + 52, 23)
+      .fill({ color: 0x101b17, alpha: 0.97 })
+      .stroke({ width: 1.5, color: 0xbda675, alpha: 0.72 })
+      .roundRect(-20, -24, WIDTH + 40, HEIGHT + 44, 20)
+      .stroke({ width: 1, color: 0xf4f0e5, alpha: 0.08 })
+      .roundRect(-10, -14, WIDTH + 20, HEIGHT + 24, 14)
+      .fill({ color: 0x080e0b, alpha: 0.9 })
+      .stroke({ width: 1, color: 0xbda675, alpha: 0.23 })
+      .roundRect(-4, -8, WIDTH + 8, HEIGHT + 12, 10)
+      .fill({ color: 0x152019, alpha: 0.9 });
+    for (let col = 1; col < COLS; col++)
+      panel.rect(col * CELL - 0.5, 0, 1, HEIGHT).fill({ color: 0xf4f0e5, alpha: 0.065 });
+    for (let row = 1; row < ROWS; row++)
+      panel.rect(0, row * CELL - 0.5, WIDTH, 1).fill({ color: 0xf4f0e5, alpha: 0.045 });
     const mask = new Graphics().rect(0, 0, WIDTH, HEIGHT).fill({ color: 0xffffff });
     this.#layer.mask = mask;
     this.#particles.mask = mask;
@@ -34,6 +49,14 @@ export class GridView extends Container {
 
   layout(orientation) {
     this.position.set(ORIGIN[orientation].x, ORIGIN[orientation].y);
+  }
+
+  /** Dekoratif açılış vitrini; oyun RNG'sini ve bakiyeyi kullanmaz. */
+  showPreview() {
+    if (this.#symbols.length) return;
+    const ingredients = [SYM.TOM, SYM.GAR, SYM.CHI, SYM.CAR, SYM.ONI, SYM.MUS, SYM.DUM, SYM.SUS, SYM.STK];
+    this.#symbols = Array.from({ length: COLS }, (_, c) =>
+      Array.from({ length: ROWS }, (_, r) => this.#spawn(ingredients[(c * 3 + r) % ingredients.length], c, r, this.#cellY(r))));
   }
 
   // ---------- Dışarıya açılan akışlar ----------
@@ -45,7 +68,7 @@ export class GridView extends Container {
     this.#symbols = grid.map((column, c) =>
       column.map((cell, r) => {
         const view = this.#spawn(cell, c, r, this.#cellY(r) - (ROWS + 1) * CELL);
-        const delay = c * TIMING.columnDelay + (ROWS - 1 - r) * 35;
+        const delay = this.#reducedMotion ? 0 : c * TIMING.columnDelay + (ROWS - 1 - r) * 35;
         falls.push(this.#animator.wait(delay)
           .then(() => this.#fall(view, this.#cellY(r), TIMING.dropIn))
           .then(() => this.#specialLanding(view)));
@@ -58,7 +81,7 @@ export class GridView extends Container {
   /** Bir tumble adımını oynatır: vurgula -> patlat -> düşür -> doldur. */
   async playStep(step, onCollect) {
     const cells = this.#cellsWhere((c, r) => step.removed[c][r]);
-    await Promise.all(cells.map(({ view }) => this.#pulse(view, isMul(view.cell) ? 1.35 : 1.18)));
+    await this.#focusCells(cells, 1.12);
 
     this.#burstCells(cells);
     step.collected.forEach((m) => onCollect?.(m.value, this.#cellPosition(m.col, m.row)));
@@ -70,7 +93,7 @@ export class GridView extends Container {
   /** Zincir sonunda ızgarada kalan çarpanları toplar. */
   async collectCells(collected, onCollect) {
     const cells = collected.map(({ col, row }) => ({ col, row, view: this.#symbols[col][row] }));
-    await Promise.all(cells.map(({ view }) => this.#pulse(view, 1.35)));
+    await this.#focusCells(cells, 1.18);
     this.#burstCells(cells);
     collected.forEach((m) => onCollect?.(m.value, this.#cellPosition(m.col, m.row)));
     await this.#vanish(cells);
@@ -79,7 +102,7 @@ export class GridView extends Container {
   /** Koşula uyan sembolleri vurgular (örn. scatter tetiklemesi). */
   async pulseWhere(predicate) {
     const cells = this.#cellsWhere((c, r) => predicate(this.#symbols[c][r].cell));
-    await Promise.all(cells.map(({ view }) => this.#pulse(view, 1.3)));
+    await this.#focusCells(cells, 1.16);
   }
 
   // ---------- Özel yardımcılar ----------
@@ -89,6 +112,7 @@ export class GridView extends Container {
   #cellPosition = (col, row) => ({ x: this.x + this.#cellX(col), y: this.y + this.#cellY(row) });
 
   #specialLanding(view) {
+    if (this.#reducedMotion) return Promise.resolve();
     if (view.cell === SYM.SCT) return this.#pulse(view, 1.14);
     if (view.cell !== SYM.WLD) return Promise.resolve();
     const direction = view.x % 2 ? 1 : -1;
@@ -97,14 +121,20 @@ export class GridView extends Container {
   }
 
   #burstCells(cells) {
+    if (this.#reducedMotion) return;
     for (const { col, row, view } of cells) {
-      const color = isMul(view.cell) || view.cell === SYM.SCT ? 0xffd25a
-        : view.cell === SYM.WLD ? 0x2ee6a6 : 0xff8a5c;
+      const color = isMul(view.cell) || view.cell === SYM.SCT ? 0xdfc58a
+        : view.cell === SYM.WLD ? 0xc2dbb3 : 0xe7dcc2;
       const origin = { x: this.#cellX(col), y: this.#cellY(row) };
-      for (let i = 0; i < 7; i++) {
-        const angle = (Math.PI * 2 * i) / 7 + Math.random() * 0.18;
-        const distance = 28 + Math.random() * 34;
-        const particle = new Graphics().circle(0, 0, 3 + Math.random() * 3).fill({ color });
+      const ring = new Graphics().circle(0, 0, 29).stroke({ width: 1.6, color, alpha: 0.8 });
+      ring.position.set(origin.x, origin.y);
+      this.#particles.addChild(ring);
+      this.#animator.tween(ring, { scale: 1.75, alpha: 0 }, 300, easeOutQuad)
+        .then(() => ring.destroy({ children: true }));
+      for (let i = 0; i < 5; i++) {
+        const angle = (Math.PI * 2 * i) / 5 + Math.random() * 0.18;
+        const distance = 24 + Math.random() * 24;
+        const particle = new Graphics().circle(0, 0, 1.5 + Math.random() * 1.5).fill({ color });
         particle.position.set(origin.x, origin.y);
         particle.alpha = 0.9;
         particle.scale.set(0.7);
@@ -127,13 +157,44 @@ export class GridView extends Container {
     return view;
   }
 
-  #fall(view, targetY, duration, ease = (t) => easeOutBack(t, 0.7)) {
-    return this.#animator.tween(view, { y: targetY }, duration, ease);
+  async #fall(view, targetY, duration, ease = (t) => easeOutBack(t, 0.35)) {
+    if (this.#reducedMotion) { view.y = targetY; return; }
+    await this.#animator.tween(view, { y: targetY }, duration, ease);
+    // İnişte kısa bir esneme: hücre konumu ve motorun ızgarası sabit kalır.
+    await this.#animator.tween(view.scale, { x: 1.055, y: 0.91 }, 55, easeOutQuad);
+    await this.#animator.tween(view.scale, { x: 1, y: 1 }, 125, (t) => easeOutBack(t, 0.8));
   }
 
   async #pulse(view, peak) {
+    if (this.#reducedMotion) { await this.#animator.wait(TIMING.highlight * 0.65); return; }
     await this.#animator.tween(view, { scale: peak }, TIMING.highlight / 2, easeOutQuad);
     await this.#animator.tween(view, { scale: 1 }, TIMING.highlight / 2, easeInQuad);
+  }
+
+  /** A readable, short hold separates the winning cells from the next tumble. */
+  async #focusCells(cells, peak) {
+    if (!cells.length) return;
+    const selected = new Set(cells.map(({ view }) => view));
+    const muted = this.#symbols.flat().filter(view => view && !selected.has(view));
+    const highlights = cells.map(({ col, row }) => {
+      const light = new Graphics()
+        .roundRect(-CELL / 2 + 6, -CELL / 2 + 6, CELL - 12, CELL - 12, 14)
+        .fill({ color: 0xdfc58a, alpha: 0.06 })
+        .stroke({ color: 0xdfc58a, width: 2, alpha: 0.8 })
+        .roundRect(-CELL / 2 + 9, -CELL / 2 + 9, CELL - 18, CELL - 18, 11)
+        .stroke({ color: 0xf4f0e5, width: 1, alpha: 0.18 });
+      light.position.set(this.#cellX(col), this.#cellY(row));
+      this.#particles.addChild(light);
+      return light;
+    });
+    const previousAlpha = muted.map(view => view.alpha);
+    muted.forEach(view => { view.alpha *= 0.48; });
+    try {
+      await Promise.all(cells.map(({ view }) => this.#pulse(view, peak)));
+    } finally {
+      muted.forEach((view, i) => { if (!view.destroyed) view.alpha = previousAlpha[i]; });
+      highlights.forEach(light => light.destroy({ children: true }));
+    }
   }
 
   #cellsWhere(predicate) {
@@ -145,7 +206,8 @@ export class GridView extends Container {
 
   async #vanish(cells) {
     await Promise.all(
-      cells.map(({ view }) => this.#animator.tween(view, { scale: 0, alpha: 0 }, TIMING.remove, (t) => easeInBack(t, 1.2))),
+      cells.map(({ view }) => this.#animator.tween(view, this.#reducedMotion ? { alpha: 0 } : { scale: 0, alpha: 0 },
+        this.#reducedMotion ? 0 : TIMING.remove, (t) => easeInBack(t, 1.2))),
     );
     for (const { col, row, view } of cells) {
       view.destroy({ children: true });
@@ -186,7 +248,7 @@ export class GridView extends Container {
   async #exit() {
     const views = this.#symbols.flatMap((col, c) => col.filter(Boolean).map((view) => ({ view, c })));
     if (!views.length) return;
-    await Promise.all(
+    if (!this.#reducedMotion) await Promise.all(
       views.map(({ view, c }) =>
         this.#animator
           .wait(c * TIMING.columnDelay * 0.5)
